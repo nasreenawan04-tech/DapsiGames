@@ -25,23 +25,63 @@ export const insertUserSchema = createInsertSchema(users).omit({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
-// Achievements table
-export const achievements = pgTable("achievements", {
+// User Stats table - tracks detailed user statistics
+export const userStats = pgTable("user_stats", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  totalPoints: integer("total_points").notNull().default(0),
+  currentRank: integer("current_rank"),
+  gamesPlayed: integer("games_played").notNull().default(0),
+  studySessions: integer("study_sessions").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertUserStatsSchema = createInsertSchema(userStats).omit({
+  id: true,
+  totalPoints: true,
+  currentRank: true,
+  gamesPlayed: true,
+  studySessions: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertUserStats = z.infer<typeof insertUserStatsSchema>;
+export type UserStats = typeof userStats.$inferSelect;
+
+// Achievement Definitions table - defines all available achievements
+export const achievementDefinitions = pgTable("achievement_definitions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  badgeIcon: text("badge_icon").notNull(),
+  pointsRequired: integer("points_required").notNull(),
+  category: text("category").notNull(),
+});
+
+export const insertAchievementDefinitionSchema = createInsertSchema(achievementDefinitions).omit({
+  id: true,
+});
+
+export type InsertAchievementDefinition = z.infer<typeof insertAchievementDefinitionSchema>;
+export type AchievementDefinition = typeof achievementDefinitions.$inferSelect;
+
+// User Achievements table - junction table for earned achievements
+export const userAchievements = pgTable("user_achievements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  badgeName: text("badge_name").notNull(),
-  badgeDescription: text("badge_description").notNull(),
-  badgeIcon: text("badge_icon").notNull(),
-  unlockedAt: timestamp("unlocked_at").notNull().defaultNow(),
+  achievementId: varchar("achievement_id").notNull().references(() => achievementDefinitions.id, { onDelete: "cascade" }),
+  earnedAt: timestamp("earned_at").notNull().defaultNow(),
 });
 
-export const insertAchievementSchema = createInsertSchema(achievements).omit({
+export const insertUserAchievementSchema = createInsertSchema(userAchievements).omit({
   id: true,
-  unlockedAt: true,
+  earnedAt: true,
 });
 
-export type InsertAchievement = z.infer<typeof insertAchievementSchema>;
-export type Achievement = typeof achievements.$inferSelect;
+export type InsertUserAchievement = z.infer<typeof insertUserAchievementSchema>;
+export type UserAchievement = typeof userAchievements.$inferSelect;
 
 // Games table
 export const games = pgTable("games", {
@@ -130,3 +170,26 @@ export const insertBookmarkSchema = createInsertSchema(bookmarks).omit({
 
 export type InsertBookmark = z.infer<typeof insertBookmarkSchema>;
 export type Bookmark = typeof bookmarks.$inferSelect;
+
+// User Progress table - tracks progress on study materials and games
+export const userProgress = pgTable("user_progress", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  itemType: text("item_type").notNull(), // 'study_material' or 'game'
+  itemId: varchar("item_id").notNull(),
+  progressPercentage: integer("progress_percentage").notNull().default(0),
+  completed: boolean("completed").notNull().default(false),
+  lastAccessedAt: timestamp("last_accessed_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertUserProgressSchema = createInsertSchema(userProgress).omit({
+  id: true,
+  progressPercentage: true,
+  completed: true,
+  lastAccessedAt: true,
+  completedAt: true,
+});
+
+export type InsertUserProgress = z.infer<typeof insertUserProgressSchema>;
+export type UserProgress = typeof userProgress.$inferSelect;

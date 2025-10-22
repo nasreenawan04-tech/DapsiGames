@@ -3,19 +3,25 @@ import { createServer, type Server } from "http";
 import { db } from "./db";
 import {
   users,
+  userStats,
   games,
-  achievements,
+  achievementDefinitions,
+  userAchievements,
   studyMaterials,
   userActivities,
   gameScores,
   bookmarks,
+  userProgress,
   insertUserSchema,
+  insertUserStatsSchema,
   insertGameSchema,
-  insertAchievementSchema,
+  insertAchievementDefinitionSchema,
+  insertUserAchievementSchema,
   insertStudyMaterialSchema,
   insertUserActivitySchema,
   insertGameScoreSchema,
   insertBookmarkSchema,
+  insertUserProgressSchema,
 } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -52,6 +58,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           password: hashedPassword,
         })
         .returning();
+
+      // Automatically create user stats for new user
+      await db
+        .insert(userStats)
+        .values({
+          userId: newUser.id,
+        });
 
       const { password, ...userWithoutPassword } = newUser;
       res.json(userWithoutPassword);
@@ -114,22 +127,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all users for leaderboard
-  app.get("/api/users/leaderboard", async (req, res) => {
+  // Get leaderboard using userStats
+  app.get("/api/leaderboard", async (req, res) => {
     try {
-      const allUsers = await db
+      const limit = parseInt(req.query.limit as string) || 100;
+      
+      const leaderboard = await db
         .select({
-          id: users.id,
+          userId: userStats.userId,
+          totalPoints: userStats.totalPoints,
+          currentRank: userStats.currentRank,
+          gamesPlayed: userStats.gamesPlayed,
+          studySessions: userStats.studySessions,
           fullName: users.fullName,
-          points: users.points,
-          rank: users.rank,
           avatarUrl: users.avatarUrl,
         })
-        .from(users)
-        .orderBy(desc(users.points))
-        .limit(100);
+        .from(userStats)
+        .innerJoin(users, eq(userStats.userId, users.id))
+        .orderBy(desc(userStats.totalPoints))
+        .limit(limit);
 
-      res.json(allUsers);
+      res.json(leaderboard);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -144,6 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Points must be a number" });
       }
 
+      // Update both users table (legacy) and userStats table
       const [updatedUser] = await db
         .update(users)
         .set({ points })
@@ -154,10 +173,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      // Update userStats with new total points
+      const [updatedStats] = await db
+        .update(userStats)
+        .set({ 
+          totalPoints: points,
+          updatedAt: new Date() 
+        })
+        .where(eq(userStats.userId, req.params.userId))
+        .returning();
+
       await updateLeaderboardRanks();
+      broadcastLeaderboardUpdate();
 
       const { password: _, ...userWithoutPassword } = updatedUser;
-      res.json(userWithoutPassword);
+      res.json({ 
+        ...userWithoutPassword,
+        stats: updatedStats 
+      });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -214,6 +247,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { password: _, ...userWithoutPassword } = updatedUser;
       res.json(userWithoutPassword);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== User Stats Routes =====
+  
+  // Get user stats
+  app.get("/api/stats/:userId", async (req, res) => {
+    try {
+      const [stats] = await db
+        .select()
+        .from(userStats)
+        .where(eq(userStats.userId, req.params.userId))
+        .limit(1);
+
+      if (!stats) {
+        return res.status(404).json({ error: "User stats not found" });
+      }
+
+      res.json(stats);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Update user stats
+  app.patch("/api/stats/:userId", async (req, res) => {
+    try {
+      const { totalPoints, gamesPlayed, studySessions } = req.body;
+      
+      const updateData: any = {};
+      if (totalPoints !== undefined) updateData.totalPoints = totalPoints;
+      if (gamesPlayed !== undefined) updateData.gamesPlayed = gamesPlayed;
+      if (studySessions !== undefined) updateData.studySessions = studySessions;
+      updateData.updatedAt = new Date();
+
+      const [updatedStats] = await db
+        .update(userStats)
+        .set(updateData)
+        .where(eq(userStats.userId, req.params.userId))
+        .returning();
+
+      if (!updatedStats) {
+        return res.status(404).json({ error: "User stats not found" });
+      }
+
+      await updateLeaderboardRanks();
+      broadcastLeaderboardUpdate();
+
+      res.json(updatedStats);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -290,10 +374,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .returning();
 
-      const [updatedUser] = await db
+      // Update user points (legacy support)
+      await db
         .update(users)
         .set({ points: user.points + pointsEarned })
-        .where(eq(users.id, userId))
+        .where(eq(users.id, userId));
+
+      // Update user stats
+      const [stats] = await db
+        .select()
+        .from(userStats)
+        .where(eq(userStats.userId, userId))
+        .limit(1);
+
+      const [updatedStats] = await db
+        .update(userStats)
+        .set({
+          totalPoints: (stats?.totalPoints || 0) + pointsEarned,
+          gamesPlayed: (stats?.gamesPlayed || 0) + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(userStats.userId, userId))
         .returning();
 
       await db.insert(userActivities).values({
@@ -309,7 +410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         gameScore,
         pointsEarned,
-        totalPoints: updatedUser.points,
+        totalPoints: updatedStats.totalPoints,
       });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -394,10 +495,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const [updatedUser] = await db
+      // Update user points (legacy support)
+      await db
         .update(users)
         .set({ points: user.points + material.pointsReward })
-        .where(eq(users.id, userId))
+        .where(eq(users.id, userId));
+
+      // Update user stats
+      const [stats] = await db
+        .select()
+        .from(userStats)
+        .where(eq(userStats.userId, userId))
+        .limit(1);
+
+      const [updatedStats] = await db
+        .update(userStats)
+        .set({
+          totalPoints: (stats?.totalPoints || 0) + material.pointsReward,
+          studySessions: (stats?.studySessions || 0) + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(userStats.userId, userId))
         .returning();
 
       await db.insert(userActivities).values({
@@ -412,7 +530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         pointsEarned: material.pointsReward,
-        totalPoints: updatedUser.points,
+        totalPoints: updatedStats.totalPoints,
       });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -421,28 +539,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Achievement Routes =====
   
-  // Get user achievements
-  app.get("/api/achievements/:userId", async (req, res) => {
+  // Get all achievement definitions
+  app.get("/api/achievements/definitions", async (req, res) => {
     try {
-      const userAchievements = await db
+      const definitions = await db
         .select()
-        .from(achievements)
-        .where(eq(achievements.userId, req.params.userId))
-        .orderBy(desc(achievements.unlockedAt));
+        .from(achievementDefinitions);
 
-      res.json(userAchievements);
+      res.json(definitions);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  // Create achievement
-  app.post("/api/achievements", async (req, res) => {
+  // Get user's earned achievements
+  app.get("/api/achievements/:userId", async (req, res) => {
     try {
-      const validatedData = insertAchievementSchema.parse(req.body);
+      const earned = await db
+        .select({
+          id: userAchievements.id,
+          userId: userAchievements.userId,
+          achievementId: userAchievements.achievementId,
+          earnedAt: userAchievements.earnedAt,
+          name: achievementDefinitions.name,
+          description: achievementDefinitions.description,
+          badgeIcon: achievementDefinitions.badgeIcon,
+          pointsRequired: achievementDefinitions.pointsRequired,
+          category: achievementDefinitions.category,
+        })
+        .from(userAchievements)
+        .innerJoin(achievementDefinitions, eq(userAchievements.achievementId, achievementDefinitions.id))
+        .where(eq(userAchievements.userId, req.params.userId))
+        .orderBy(desc(userAchievements.earnedAt));
+
+      res.json(earned);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Unlock achievement for user
+  app.post("/api/achievements/unlock", async (req, res) => {
+    try {
+      const validatedData = insertUserAchievementSchema.parse(req.body);
+
+      // Check if achievement already unlocked
+      const existing = await db
+        .select()
+        .from(userAchievements)
+        .where(
+          sql`${userAchievements.userId} = ${validatedData.userId} AND ${userAchievements.achievementId} = ${validatedData.achievementId}`
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
+        return res.status(400).json({ error: "Achievement already unlocked" });
+      }
 
       const [achievement] = await db
-        .insert(achievements)
+        .insert(userAchievements)
         .values(validatedData)
         .returning();
 
@@ -517,18 +672,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ===== User Progress Routes =====
+  
+  // Get user progress for all items or by type
+  app.get("/api/progress/:userId", async (req, res) => {
+    try {
+      const itemType = req.query.itemType as string | undefined;
+      
+      let progress;
+      if (itemType) {
+        progress = await db
+          .select()
+          .from(userProgress)
+          .where(
+            sql`${userProgress.userId} = ${req.params.userId} AND ${userProgress.itemType} = ${itemType}`
+          )
+          .orderBy(desc(userProgress.lastAccessedAt));
+      } else {
+        progress = await db
+          .select()
+          .from(userProgress)
+          .where(eq(userProgress.userId, req.params.userId))
+          .orderBy(desc(userProgress.lastAccessedAt));
+      }
+
+      res.json(progress);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get progress for specific item
+  app.get("/api/progress/:userId/:itemId", async (req, res) => {
+    try {
+      const itemType = req.query.itemType as string;
+      
+      if (!itemType) {
+        return res.status(400).json({ error: "itemType query parameter required" });
+      }
+
+      const [progress] = await db
+        .select()
+        .from(userProgress)
+        .where(
+          sql`${userProgress.userId} = ${req.params.userId} AND ${userProgress.itemId} = ${req.params.itemId} AND ${userProgress.itemType} = ${itemType}`
+        )
+        .limit(1);
+
+      if (!progress) {
+        return res.status(404).json({ error: "Progress not found" });
+      }
+
+      res.json(progress);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Create or update user progress
+  app.post("/api/progress", async (req, res) => {
+    try {
+      const validatedData = insertUserProgressSchema.parse(req.body);
+      
+      // Check if progress already exists
+      const existing = await db
+        .select()
+        .from(userProgress)
+        .where(
+          sql`${userProgress.userId} = ${validatedData.userId} AND ${userProgress.itemId} = ${validatedData.itemId} AND ${userProgress.itemType} = ${validatedData.itemType}`
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
+        // Update existing progress
+        const updateData = req.body;
+        updateData.lastAccessedAt = new Date();
+        
+        const [updated] = await db
+          .update(userProgress)
+          .set(updateData)
+          .where(eq(userProgress.id, existing[0].id))
+          .returning();
+
+        return res.json(updated);
+      }
+
+      // Create new progress
+      const [progress] = await db
+        .insert(userProgress)
+        .values(validatedData)
+        .returning();
+
+      res.json(progress);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // Helper function to update leaderboard ranks
   async function updateLeaderboardRanks() {
-    const allUsers = await db
+    const allStats = await db
       .select()
-      .from(users)
-      .orderBy(desc(users.points));
+      .from(userStats)
+      .orderBy(desc(userStats.totalPoints));
 
-    for (let i = 0; i < allUsers.length; i++) {
+    for (let i = 0; i < allStats.length; i++) {
       await db
-        .update(users)
-        .set({ rank: i + 1 })
-        .where(eq(users.id, allUsers[i].id));
+        .update(userStats)
+        .set({ currentRank: i + 1, updatedAt: new Date() })
+        .where(eq(userStats.id, allStats[i].id));
     }
   }
 

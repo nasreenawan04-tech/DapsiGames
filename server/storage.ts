@@ -1,10 +1,14 @@
 import {
   type User,
   type InsertUser,
+  type UserStats,
+  type InsertUserStats,
   type Game,
   type InsertGame,
-  type Achievement,
-  type InsertAchievement,
+  type AchievementDefinition,
+  type InsertAchievementDefinition,
+  type UserAchievement,
+  type InsertUserAchievement,
   type StudyMaterial,
   type InsertStudyMaterial,
   type UserActivity,
@@ -13,6 +17,8 @@ import {
   type InsertGameScore,
   type Bookmark,
   type InsertBookmark,
+  type UserProgress,
+  type InsertUserProgress,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -24,14 +30,25 @@ export interface IStorage {
   updateUserPoints(userId: string, points: number): Promise<User>;
   getAllUsers(): Promise<User[]>;
   
+  // User Stats methods
+  getUserStats(userId: string): Promise<UserStats | undefined>;
+  createUserStats(stats: InsertUserStats): Promise<UserStats>;
+  updateUserStats(userId: string, updates: Partial<UserStats>): Promise<UserStats>;
+  getLeaderboard(limit?: number): Promise<(UserStats & { user: User })[]>;
+  
   // Game methods
   getGame(id: string): Promise<Game | undefined>;
   getAllGames(): Promise<Game[]>;
   createGame(game: InsertGame): Promise<Game>;
   
-  // Achievement methods
-  getUserAchievements(userId: string): Promise<Achievement[]>;
-  createAchievement(achievement: InsertAchievement): Promise<Achievement>;
+  // Achievement Definition methods
+  getAchievementDefinition(id: string): Promise<AchievementDefinition | undefined>;
+  getAllAchievementDefinitions(): Promise<AchievementDefinition[]>;
+  createAchievementDefinition(definition: InsertAchievementDefinition): Promise<AchievementDefinition>;
+  
+  // User Achievement methods
+  getUserAchievements(userId: string): Promise<UserAchievement[]>;
+  createUserAchievement(achievement: InsertUserAchievement): Promise<UserAchievement>;
   
   // Study Material methods
   getStudyMaterial(id: string): Promise<StudyMaterial | undefined>;
@@ -50,25 +67,37 @@ export interface IStorage {
   getUserBookmarks(userId: string): Promise<Bookmark[]>;
   createBookmark(bookmark: InsertBookmark): Promise<Bookmark>;
   deleteBookmark(userId: string, studyMaterialId: string): Promise<void>;
+  
+  // User Progress methods
+  getUserProgress(userId: string, itemType?: string): Promise<UserProgress[]>;
+  getProgressForItem(userId: string, itemId: string, itemType: string): Promise<UserProgress | undefined>;
+  createUserProgress(progress: InsertUserProgress): Promise<UserProgress>;
+  updateUserProgress(userId: string, itemId: string, itemType: string, updates: Partial<UserProgress>): Promise<UserProgress>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
+  private userStats: Map<string, UserStats>;
   private games: Map<string, Game>;
-  private achievements: Map<string, Achievement>;
+  private achievementDefinitions: Map<string, AchievementDefinition>;
+  private userAchievements: Map<string, UserAchievement>;
   private studyMaterials: Map<string, StudyMaterial>;
   private userActivities: Map<string, UserActivity>;
   private gameScores: Map<string, GameScore>;
   private bookmarks: Map<string, Bookmark>;
+  private userProgress: Map<string, UserProgress>;
 
   constructor() {
     this.users = new Map();
+    this.userStats = new Map();
     this.games = new Map();
-    this.achievements = new Map();
+    this.achievementDefinitions = new Map();
+    this.userAchievements = new Map();
     this.studyMaterials = new Map();
     this.userActivities = new Map();
     this.gameScores = new Map();
     this.bookmarks = new Map();
+    this.userProgress = new Map();
   }
 
   // User methods
@@ -91,7 +120,10 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.users.set(id, user);
-    await this.updateLeaderboardRanks();
+    
+    // Automatically create user stats
+    await this.createUserStats({ userId: id });
+    
     return user;
   }
 
@@ -110,10 +142,12 @@ export class MemStorage implements IStorage {
   }
 
   private async updateLeaderboardRanks(): Promise<void> {
-    const sortedUsers = await this.getAllUsers();
-    sortedUsers.forEach((user, index) => {
-      user.rank = index + 1;
-      this.users.set(user.id, user);
+    const allStats = Array.from(this.userStats.values())
+      .sort((a, b) => b.totalPoints - a.totalPoints);
+    
+    allStats.forEach((stats, index) => {
+      stats.currentRank = index + 1;
+      this.userStats.set(stats.id, stats);
     });
   }
 
@@ -133,21 +167,85 @@ export class MemStorage implements IStorage {
     return game;
   }
 
-  // Achievement methods
-  async getUserAchievements(userId: string): Promise<Achievement[]> {
-    return Array.from(this.achievements.values()).filter(
+  // User Stats methods
+  async getUserStats(userId: string): Promise<UserStats | undefined> {
+    return Array.from(this.userStats.values()).find((stats) => stats.userId === userId);
+  }
+
+  async createUserStats(insertStats: InsertUserStats): Promise<UserStats> {
+    const id = randomUUID();
+    const stats: UserStats = {
+      ...insertStats,
+      id,
+      totalPoints: 0,
+      currentRank: null,
+      gamesPlayed: 0,
+      studySessions: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.userStats.set(id, stats);
+    await this.updateLeaderboardRanks();
+    return stats;
+  }
+
+  async updateUserStats(userId: string, updates: Partial<UserStats>): Promise<UserStats> {
+    const stats = await this.getUserStats(userId);
+    if (!stats) throw new Error("User stats not found");
+    
+    const updated: UserStats = {
+      ...stats,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.userStats.set(stats.id, updated);
+    await this.updateLeaderboardRanks();
+    return updated;
+  }
+
+  async getLeaderboard(limit = 100): Promise<(UserStats & { user: User })[]> {
+    const allStats = Array.from(this.userStats.values())
+      .sort((a, b) => b.totalPoints - a.totalPoints)
+      .slice(0, limit);
+    
+    return allStats.map((stats) => {
+      const user = this.users.get(stats.userId);
+      if (!user) throw new Error(`User not found for stats: ${stats.userId}`);
+      return { ...stats, user };
+    });
+  }
+
+  // Achievement Definition methods
+  async getAchievementDefinition(id: string): Promise<AchievementDefinition | undefined> {
+    return this.achievementDefinitions.get(id);
+  }
+
+  async getAllAchievementDefinitions(): Promise<AchievementDefinition[]> {
+    return Array.from(this.achievementDefinitions.values());
+  }
+
+  async createAchievementDefinition(insertDefinition: InsertAchievementDefinition): Promise<AchievementDefinition> {
+    const id = randomUUID();
+    const definition: AchievementDefinition = { ...insertDefinition, id };
+    this.achievementDefinitions.set(id, definition);
+    return definition;
+  }
+
+  // User Achievement methods
+  async getUserAchievements(userId: string): Promise<UserAchievement[]> {
+    return Array.from(this.userAchievements.values()).filter(
       (achievement) => achievement.userId === userId
     );
   }
 
-  async createAchievement(insertAchievement: InsertAchievement): Promise<Achievement> {
+  async createUserAchievement(insertAchievement: InsertUserAchievement): Promise<UserAchievement> {
     const id = randomUUID();
-    const achievement: Achievement = {
+    const achievement: UserAchievement = {
       ...insertAchievement,
       id,
-      unlockedAt: new Date(),
+      earnedAt: new Date(),
     };
-    this.achievements.set(id, achievement);
+    this.userAchievements.set(id, achievement);
     return achievement;
   }
 
@@ -229,6 +327,55 @@ export class MemStorage implements IStorage {
     if (bookmark) {
       this.bookmarks.delete(bookmark.id);
     }
+  }
+
+  // User Progress methods
+  async getUserProgress(userId: string, itemType?: string): Promise<UserProgress[]> {
+    return Array.from(this.userProgress.values()).filter(
+      (progress) =>
+        progress.userId === userId && (!itemType || progress.itemType === itemType)
+    );
+  }
+
+  async getProgressForItem(userId: string, itemId: string, itemType: string): Promise<UserProgress | undefined> {
+    return Array.from(this.userProgress.values()).find(
+      (progress) =>
+        progress.userId === userId &&
+        progress.itemId === itemId &&
+        progress.itemType === itemType
+    );
+  }
+
+  async createUserProgress(insertProgress: InsertUserProgress): Promise<UserProgress> {
+    const id = randomUUID();
+    const progress: UserProgress = {
+      ...insertProgress,
+      id,
+      progressPercentage: 0,
+      completed: false,
+      lastAccessedAt: new Date(),
+      completedAt: null,
+    };
+    this.userProgress.set(id, progress);
+    return progress;
+  }
+
+  async updateUserProgress(
+    userId: string,
+    itemId: string,
+    itemType: string,
+    updates: Partial<UserProgress>
+  ): Promise<UserProgress> {
+    const progress = await this.getProgressForItem(userId, itemId, itemType);
+    if (!progress) throw new Error("User progress not found");
+    
+    const updated: UserProgress = {
+      ...progress,
+      ...updates,
+      lastAccessedAt: new Date(),
+    };
+    this.userProgress.set(progress.id, updated);
+    return updated;
   }
 }
 
