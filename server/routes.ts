@@ -161,6 +161,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user profile
+  app.patch("/api/user/:userId/profile", async (req, res) => {
+    try {
+      const { fullName, avatarUrl } = req.body;
+      
+      const updateData: any = {};
+      if (fullName !== undefined) updateData.fullName = fullName;
+      if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: "No fields to update" });
+      }
+
+      const [updatedUser] = await db
+        .update(users)
+        .set(updateData)
+        .where(eq(users.id, req.params.userId))
+        .returning();
+
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const { password: _, ...userWithoutPassword } = updatedUser;
+      res.json(userWithoutPassword);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ===== Game Routes =====
   
   // Get all games

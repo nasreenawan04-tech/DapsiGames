@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { User, Award, Trophy, TrendingUp, Calendar, Settings, Camera } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,76 +6,77 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/auth";
+import { useAchievements, useActivities, useUpdateProfile } from "@/lib/api-hooks";
+import { formatDistanceToNow, format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Profile() {
-  const user = {
-    id: "user-12",
-    fullName: "Alex Johnson",
-    email: "alex.johnson@example.com",
-    points: 8450,
-    rank: 12,
-    joinedDate: "Jan 15, 2024",
-    streak: 7,
-    avatarUrl: "",
+  const { user } = useAuth();
+  const { data: achievements = [], isLoading: achievementsLoading } = useAchievements(user?.id);
+  const { data: activities = [], isLoading: activitiesLoading } = useActivities(user?.id);
+  const updateProfile = useUpdateProfile();
+  const { toast } = useToast();
+  
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editedName, setEditedName] = useState("");
+
+  if (!user) {
+    return null;
+  }
+
+  const handleEditProfile = () => {
+    setEditedName(user.fullName);
+    setIsEditDialogOpen(true);
   };
 
-  const achievements = [
-    {
-      id: 1,
-      name: "First Steps",
-      description: "Complete your first study session",
-      icon: "🎯",
-      unlocked: true,
-      unlockedAt: "Jan 16, 2024",
-    },
-    {
-      id: 2,
-      name: "Quick Learner",
-      description: "Earn 1000 points in one week",
-      icon: "⚡",
-      unlocked: true,
-      unlockedAt: "Jan 22, 2024",
-    },
-    {
-      id: 3,
-      name: "Math Master",
-      description: "Complete 10 math quizzes",
-      icon: "🔢",
-      unlocked: true,
-      unlockedAt: "Feb 5, 2024",
-    },
-    {
-      id: 4,
-      name: "Streak Champion",
-      description: "Maintain a 7-day streak",
-      icon: "🔥",
-      unlocked: true,
-      unlockedAt: "Feb 10, 2024",
-    },
-    {
-      id: 5,
-      name: "Top 20",
-      description: "Reach top 20 on leaderboard",
-      icon: "🏆",
-      unlocked: false,
-      progress: 60,
-    },
-    {
-      id: 6,
-      name: "Science Guru",
-      description: "Complete 20 science quizzes",
-      icon: "🧪",
-      unlocked: false,
-      progress: 35,
-    },
-  ];
+  const handleSaveProfile = async () => {
+    try {
+      await updateProfile.mutateAsync({
+        userId: user.id,
+        fullName: editedName,
+      });
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been successfully updated.",
+      });
+      setIsEditDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile",
+        variant: "destructive",
+      });
+    }
+  };
 
   const stats = [
     { label: "Total Points", value: user.points.toLocaleString(), icon: Trophy },
-    { label: "Global Rank", value: `#${user.rank}`, icon: TrendingUp },
-    { label: "Study Streak", value: `${user.streak} days`, icon: Calendar },
-    { label: "Achievements", value: "23/50", icon: Award },
+    { label: "Global Rank", value: user.rank ? `#${user.rank}` : "Unranked", icon: TrendingUp },
+    { label: "Activities", value: activities.length.toString(), icon: Calendar },
+    { label: "Achievements", value: achievements.length.toString(), icon: Award },
   ];
+
+  const groupedActivities = activities.reduce((acc, activity) => {
+    const date = format(new Date(activity.timestamp), "MMM dd, yyyy");
+    if (!acc[date]) {
+      acc[date] = [];
+    }
+    acc[date].push(activity);
+    return acc;
+  }, {} as Record<string, typeof activities>);
+
+  const activityDays = Object.entries(groupedActivities).slice(0, 5);
 
   return (
     <div className="min-h-screen bg-background">
@@ -84,7 +86,7 @@ export default function Profile() {
             <div className="flex flex-col md:flex-row gap-6 items-start">
               <div className="relative">
                 <Avatar className="h-24 w-24">
-                  <AvatarImage src={user.avatarUrl} alt={user.fullName} />
+                  <AvatarImage src={user.avatarUrl || undefined} alt={user.fullName} />
                   <AvatarFallback className="bg-primary text-primary-foreground text-3xl font-bold">
                     {user.fullName.charAt(0)}
                   </AvatarFallback>
@@ -94,6 +96,7 @@ export default function Profile() {
                   variant="secondary"
                   className="absolute bottom-0 right-0 h-8 w-8 rounded-full"
                   data-testid="button-change-avatar"
+                  disabled
                 >
                   <Camera className="h-4 w-4" />
                 </Button>
@@ -107,17 +110,21 @@ export default function Profile() {
                     </h1>
                     <p className="text-muted-foreground">{user.email}</p>
                   </div>
-                  <Button variant="outline" data-testid="button-edit-profile">
+                  <Button variant="outline" onClick={handleEditProfile} data-testid="button-edit-profile">
                     <Settings className="h-4 w-4 mr-2" />
                     Edit Profile
                   </Button>
                 </div>
 
                 <div className="flex items-center gap-2 mb-4">
-                  <Badge variant="secondary">Member since {user.joinedDate}</Badge>
-                  <Badge className="bg-gradient-to-r from-primary to-secondary text-white">
-                    Rank #{user.rank}
+                  <Badge variant="secondary">
+                    Member since {format(new Date(user.createdAt), "MMM dd, yyyy")}
                   </Badge>
+                  {user.rank && (
+                    <Badge className="bg-gradient-to-r from-primary to-secondary text-white">
+                      Rank #{user.rank}
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -156,49 +163,42 @@ export default function Profile() {
                   Your Achievements
                 </CardTitle>
                 <CardDescription>
-                  {achievements.filter((a) => a.unlocked).length} of {achievements.length} unlocked
+                  {achievements.length} achievements unlocked
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {achievements.map((achievement) => (
-                    <Card
-                      key={achievement.id}
-                      className={`hover-elevate transition-all duration-200 ${
-                        achievement.unlocked
-                          ? "bg-gradient-to-br from-primary/5 to-secondary/5"
-                          : "opacity-60"
-                      }`}
-                      data-testid={`achievement-${achievement.id}`}
-                    >
-                      <CardContent className="p-6 text-center space-y-3">
-                        <div
-                          className={`text-5xl ${!achievement.unlocked && "grayscale opacity-50"}`}
-                        >
-                          {achievement.icon}
-                        </div>
-                        <div>
-                          <h3 className="font-bold mb-1">{achievement.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {achievement.description}
-                          </p>
-                        </div>
-                        {achievement.unlocked ? (
-                          <Badge variant="secondary" className="w-full justify-center">
-                            Unlocked {achievement.unlockedAt}
-                          </Badge>
-                        ) : (
-                          <div className="space-y-2">
-                            <Progress value={achievement.progress || 0} className="h-2" />
-                            <p className="text-xs text-muted-foreground">
-                              {achievement.progress}% complete
+                {achievementsLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading achievements...</div>
+                ) : achievements.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No achievements yet. Start playing games and studying to unlock achievements!
+                  </div>
+                ) : (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {achievements.map((achievement) => (
+                      <Card
+                        key={achievement.id}
+                        className="hover-elevate transition-all duration-200 bg-gradient-to-br from-primary/5 to-secondary/5"
+                        data-testid={`achievement-${achievement.id}`}
+                      >
+                        <CardContent className="p-6 text-center space-y-3">
+                          <div className="text-5xl">
+                            {achievement.badgeIcon}
+                          </div>
+                          <div>
+                            <h3 className="font-bold mb-1">{achievement.badgeName}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {achievement.badgeDescription}
                             </p>
                           </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                          <Badge variant="secondary" className="w-full justify-center">
+                            Unlocked {formatDistanceToNow(new Date(achievement.unlockedAt), { addSuffix: true })}
+                          </Badge>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -210,60 +210,87 @@ export default function Profile() {
                   <Calendar className="h-5 w-5" />
                   Recent Activity
                 </CardTitle>
-                <CardDescription>Your learning journey over the past month</CardDescription>
+                <CardDescription>Your learning journey</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {[
-                    {
-                      date: "Today",
-                      activities: [
-                        { time: "2:30 PM", action: "Completed Math Quiz", points: 150 },
-                        { time: "10:15 AM", action: "Studied Algebra Module", points: 100 },
-                      ],
-                    },
-                    {
-                      date: "Yesterday",
-                      activities: [
-                        { time: "4:45 PM", action: "Science Trivia Challenge", points: 120 },
-                        { time: "1:20 PM", action: "Unlocked Achievement Badge", points: 50 },
-                      ],
-                    },
-                    {
-                      date: "Feb 10, 2024",
-                      activities: [
-                        { time: "3:15 PM", action: "Geography Quiz Master", points: 130 },
-                      ],
-                    },
-                  ].map((day, dayIndex) => (
-                    <div key={dayIndex} data-testid={`activity-day-${dayIndex}`}>
-                      <h3 className="font-semibold mb-3 text-sm text-muted-foreground">
-                        {day.date}
-                      </h3>
-                      <div className="space-y-2 ml-4 border-l-2 border-muted pl-4">
-                        {day.activities.map((activity, actIndex) => (
-                          <div
-                            key={actIndex}
-                            className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover-elevate"
-                          >
-                            <div>
-                              <p className="font-medium">{activity.action}</p>
-                              <p className="text-sm text-muted-foreground">{activity.time}</p>
+                {activitiesLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading activities...</div>
+                ) : activityDays.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No activities yet. Start playing games or studying to see your activity!
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {activityDays.map(([date, dayActivities]) => (
+                      <div key={date} data-testid={`activity-day-${date}`}>
+                        <h3 className="font-semibold mb-3 text-sm text-muted-foreground">
+                          {date}
+                        </h3>
+                        <div className="space-y-2 ml-4 border-l-2 border-muted pl-4">
+                          {dayActivities.map((activity) => (
+                            <div
+                              key={activity.id}
+                              className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover-elevate"
+                            >
+                              <div>
+                                <p className="font-medium">{activity.activityTitle}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
+                                </p>
+                              </div>
+                              <Badge variant="secondary" className="font-mono">
+                                +{activity.pointsEarned} pts
+                              </Badge>
                             </div>
-                            <Badge variant="secondary" className="font-mono">
-                              +{activity.points} pts
-                            </Badge>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent data-testid="dialog-edit-profile">
+          <DialogHeader>
+            <DialogTitle>Edit Profile</DialogTitle>
+            <DialogDescription>
+              Update your profile information. Changes will be reflected immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Full Name</Label>
+              <Input
+                id="fullName"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                data-testid="input-edit-name"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+              data-testid="button-cancel-edit"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveProfile}
+              disabled={updateProfile.isPending}
+              data-testid="button-save-profile"
+            >
+              {updateProfile.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

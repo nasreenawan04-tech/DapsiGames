@@ -49,6 +49,24 @@ export function useUser(userId: string | null | undefined) {
   });
 }
 
+export function useUpdateProfile() {
+  return useMutation({
+    mutationFn: async ({ userId, fullName, avatarUrl }: { userId: string; fullName?: string; avatarUrl?: string }) => {
+      return apiRequest("PATCH", `/api/user/${userId}/profile`, { fullName, avatarUrl });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        localStorage.setItem("user", JSON.stringify({ ...user, ...data }));
+        window.dispatchEvent(new Event("user-updated"));
+      }
+    },
+  });
+}
+
 // Game hooks
 export function useGames() {
   return useQuery<Game[]>({

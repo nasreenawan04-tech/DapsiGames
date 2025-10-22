@@ -23,6 +23,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(JSON.parse(storedUser));
     }
     setIsLoading(false);
+
+    const handleUserUpdate = () => {
+      const updatedUser = localStorage.getItem("user");
+      if (updatedUser) {
+        setUser(JSON.parse(updatedUser));
+      }
+    };
+
+    window.addEventListener("user-updated", handleUserUpdate);
+    return () => window.removeEventListener("user-updated", handleUserUpdate);
   }, []);
 
   const login = async (email: string, password: string) => {
