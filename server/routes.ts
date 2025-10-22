@@ -8,12 +8,14 @@ import {
   studyMaterials,
   userActivities,
   gameScores,
+  bookmarks,
   insertUserSchema,
   insertGameSchema,
   insertAchievementSchema,
   insertStudyMaterialSchema,
   insertUserActivitySchema,
   insertGameScoreSchema,
+  insertBookmarkSchema,
 } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -445,6 +447,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .returning();
 
       res.json(achievement);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== Bookmark Routes =====
+  
+  // Get user bookmarks
+  app.get("/api/bookmarks/:userId", async (req, res) => {
+    try {
+      const userBookmarks = await db
+        .select()
+        .from(bookmarks)
+        .where(eq(bookmarks.userId, req.params.userId));
+
+      res.json(userBookmarks);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Create bookmark
+  app.post("/api/bookmarks", async (req, res) => {
+    try {
+      const validatedData = insertBookmarkSchema.parse(req.body);
+
+      const [bookmark] = await db
+        .insert(bookmarks)
+        .values(validatedData)
+        .returning();
+
+      res.json(bookmark);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Delete bookmark
+  app.delete("/api/bookmarks/:userId/:materialId", async (req, res) => {
+    try {
+      await db
+        .delete(bookmarks)
+        .where(
+          sql`${bookmarks.userId} = ${req.params.userId} AND ${bookmarks.studyMaterialId} = ${req.params.materialId}`
+        );
+
+      res.json({ message: "Bookmark deleted" });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

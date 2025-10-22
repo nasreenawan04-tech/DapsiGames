@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "./queryClient";
-import type { User, Game, StudyMaterial, Achievement, UserActivity } from "@shared/schema";
+import type { User, Game, StudyMaterial, Achievement, UserActivity, Bookmark } from "@shared/schema";
 
 // Real-time websocket connection for leaderboard updates
 let ws: WebSocket | null = null;
@@ -134,6 +134,36 @@ export function useActivities(userId: string | null | undefined) {
   return useQuery<UserActivity[]>({
     queryKey: ["/api/activities", userId],
     enabled: !!userId,
+  });
+}
+
+// Bookmark hooks
+export function useBookmarks(userId: string | null | undefined) {
+  return useQuery<Bookmark[]>({
+    queryKey: ["/api/bookmarks", userId],
+    enabled: !!userId,
+  });
+}
+
+export function useCreateBookmark() {
+  return useMutation({
+    mutationFn: async ({ userId, studyMaterialId }: { userId: string; studyMaterialId: string }) => {
+      return apiRequest("POST", "/api/bookmarks", { userId, studyMaterialId });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bookmarks", variables.userId] });
+    },
+  });
+}
+
+export function useDeleteBookmark() {
+  return useMutation({
+    mutationFn: async ({ userId, studyMaterialId }: { userId: string; studyMaterialId: string }) => {
+      return apiRequest("DELETE", `/api/bookmarks/${userId}/${studyMaterialId}`, {});
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bookmarks", variables.userId] });
+    },
   });
 }
 

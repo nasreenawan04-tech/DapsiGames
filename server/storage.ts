@@ -11,6 +11,8 @@ import {
   type InsertUserActivity,
   type GameScore,
   type InsertGameScore,
+  type Bookmark,
+  type InsertBookmark,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -43,6 +45,11 @@ export interface IStorage {
   // Game Score methods
   getUserGameScores(userId: string, gameId?: string): Promise<GameScore[]>;
   createGameScore(score: InsertGameScore): Promise<GameScore>;
+  
+  // Bookmark methods
+  getUserBookmarks(userId: string): Promise<Bookmark[]>;
+  createBookmark(bookmark: InsertBookmark): Promise<Bookmark>;
+  deleteBookmark(userId: string, studyMaterialId: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -52,6 +59,7 @@ export class MemStorage implements IStorage {
   private studyMaterials: Map<string, StudyMaterial>;
   private userActivities: Map<string, UserActivity>;
   private gameScores: Map<string, GameScore>;
+  private bookmarks: Map<string, Bookmark>;
 
   constructor() {
     this.users = new Map();
@@ -60,6 +68,7 @@ export class MemStorage implements IStorage {
     this.studyMaterials = new Map();
     this.userActivities = new Map();
     this.gameScores = new Map();
+    this.bookmarks = new Map();
   }
 
   // User methods
@@ -193,6 +202,33 @@ export class MemStorage implements IStorage {
     };
     this.gameScores.set(id, score);
     return score;
+  }
+
+  // Bookmark methods
+  async getUserBookmarks(userId: string): Promise<Bookmark[]> {
+    return Array.from(this.bookmarks.values()).filter(
+      (bookmark) => bookmark.userId === userId
+    );
+  }
+
+  async createBookmark(insertBookmark: InsertBookmark): Promise<Bookmark> {
+    const id = randomUUID();
+    const bookmark: Bookmark = {
+      ...insertBookmark,
+      id,
+      createdAt: new Date(),
+    };
+    this.bookmarks.set(id, bookmark);
+    return bookmark;
+  }
+
+  async deleteBookmark(userId: string, studyMaterialId: string): Promise<void> {
+    const bookmark = Array.from(this.bookmarks.values()).find(
+      (b) => b.userId === userId && b.studyMaterialId === studyMaterialId
+    );
+    if (bookmark) {
+      this.bookmarks.delete(bookmark.id);
+    }
   }
 }
 
