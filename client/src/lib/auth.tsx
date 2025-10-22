@@ -1,84 +1,130 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
-import type { User } from "@shared/schema";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
+import {
+  signIn,
+  signUp,
+  signOut,
+  getCurrentUser,
+  onAuthStateChange,
+} from "@/services/authService";
+
+interface AuthUser {
+  id: string;
+  email: string;
+  fullName: string;
+  avatarUrl?: string;
+}
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
+  supabaseUser: SupabaseUser | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (fullName: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  register: (fullName: string, email: string, password: string) => Promise<{ needsEmailVerification: boolean }>;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
+    let mounted = true;
 
-    const handleUserUpdate = () => {
-      const updatedUser = localStorage.getItem("user");
-      if (updatedUser) {
-        setUser(JSON.parse(updatedUser));
+    async function initAuth() {
+      try {
+        const currentUser = await getCurrentUser();
+        if (mounted && currentUser) {
+          setSupabaseUser(currentUser);
+          setUser({
+            id: currentUser.id,
+            email: currentUser.email || '',
+            fullName: currentUser.user_metadata?.full_name || '',
+            avatarUrl: currentUser.user_metadata?.avatar_url,
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching current user:', error);
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
-    };
+    }
 
-    window.addEventListener("user-updated", handleUserUpdate);
-    return () => window.removeEventListener("user-updated", handleUserUpdate);
+    initAuth();
+
+    const subscription = onAuthStateChange((supabaseUser) => {
+      if (!mounted) return;
+
+      setSupabaseUser(supabaseUser);
+      if (supabaseUser) {
+        setUser({
+          id: supabaseUser.id,
+          email: supabaseUser.email || '',
+          fullName: supabaseUser.user_metadata?.full_name || '',
+          avatarUrl: supabaseUser.user_metadata?.avatar_url,
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+    const { user: supabaseUser } = await signIn({ email, password });
+    
+    setSupabaseUser(supabaseUser);
+    setUser({
+      id: supabaseUser.id,
+      email: supabaseUser.email || '',
+      fullName: supabaseUser.user_metadata?.full_name || '',
+      avatarUrl: supabaseUser.user_metadata?.avatar_url,
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Login failed");
-    }
-
-    const userData = await response.json();
-    setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
+    
     setLocation("/dashboard");
   };
 
   const register = async (fullName: string, email: string, password: string) => {
-    const response = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fullName, email, password }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Registration failed");
+    const result = await signUp({ email, password, fullName });
+    
+    if (result.needsEmailVerification) {
+      return { needsEmailVerification: true };
     }
 
-    const userData = await response.json();
-    setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
-    setLocation("/dashboard");
+    if (result.user) {
+      setSupabaseUser(result.user);
+      setUser({
+        id: result.user.id,
+        email: result.user.email || '',
+        fullName: result.user.user_metadata?.full_name || '',
+        avatarUrl: result.user.user_metadata?.avatar_url,
+      });
+      setLocation("/dashboard");
+    }
+
+    return { needsEmailVerification: false };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await signOut();
     setUser(null);
-    localStorage.removeItem("user");
+    setSupabaseUser(null);
     setLocation("/");
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, supabaseUser, login, register, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
