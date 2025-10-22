@@ -32,7 +32,7 @@ function Router() {
         isAuthenticated={isAuthenticated}
         user={user ? {
           fullName: user.fullName,
-          points: user.points,
+          points: user.points || 0,
           avatarUrl: user.avatarUrl || undefined,
         } : undefined}
         onLogout={logout}
