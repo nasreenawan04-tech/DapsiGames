@@ -19,6 +19,8 @@ import Study from "@/pages/study";
 import Games from "@/pages/games";
 import GamePlay from "@/pages/game-play";
 import Guest from "@/pages/guest";
+import AuthCallback from "@/pages/auth-callback";
+import ResetPassword from "@/pages/reset-password";
 
 function Router() {
   const { user, logout } = useAuth();
@@ -41,6 +43,8 @@ function Router() {
           <Route path="/login" component={Login} />
           <Route path="/signup" component={Signup} />
           <Route path="/forgot-password" component={ForgotPassword} />
+          <Route path="/auth/callback" component={AuthCallback} />
+          <Route path="/auth/reset-password" component={ResetPassword} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/leaderboard" component={Leaderboard} />
           <Route path="/profile" component={Profile} />

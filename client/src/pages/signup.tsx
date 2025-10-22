@@ -1,9 +1,11 @@
-import { Link } from "wouter";
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
 import { Trophy, Mail, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,12 +18,17 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
+import EmailVerification from "./email-verification";
 
 const signupSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters"),
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number"),
   confirmPassword: z.string(),
   agreeToTerms: z.boolean().refine((val) => val === true, {
     message: "You must agree to the terms and conditions",
@@ -33,9 +40,27 @@ const signupSchema = z.object({
 
 type SignupFormValues = z.infer<typeof signupSchema>;
 
+function getPasswordStrength(password: string): { strength: number; label: string; color: string } {
+  let strength = 0;
+  
+  if (password.length >= 8) strength += 25;
+  if (password.length >= 12) strength += 25;
+  if (/[A-Z]/.test(password)) strength += 15;
+  if (/[a-z]/.test(password)) strength += 15;
+  if (/[0-9]/.test(password)) strength += 10;
+  if (/[^A-Za-z0-9]/.test(password)) strength += 10;
+
+  if (strength < 40) return { strength, label: "Weak", color: "bg-destructive" };
+  if (strength < 70) return { strength, label: "Medium", color: "bg-accent" };
+  return { strength, label: "Strong", color: "bg-secondary" };
+}
+
 export default function Signup() {
   const { register } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const [showVerification, setShowVerification] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState("");
   
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -48,13 +73,26 @@ export default function Signup() {
     },
   });
 
+  const password = form.watch("password");
+  const passwordStrength = password ? getPasswordStrength(password) : null;
+
   const onSubmit = async (data: SignupFormValues) => {
     try {
-      await register(data.fullName, data.email, data.password);
-      toast({
-        title: "Welcome to DapsiGames!",
-        description: "Your account has been created successfully.",
-      });
+      const result = await register(data.fullName, data.email, data.password);
+      
+      if (result.needsEmailVerification) {
+        setRegisteredEmail(data.email);
+        setShowVerification(true);
+        toast({
+          title: "Account created!",
+          description: "Please check your email to verify your account.",
+        });
+      } else {
+        toast({
+          title: "Welcome to DapsiGames!",
+          description: "Your account has been created successfully.",
+        });
+      }
     } catch (error: any) {
       toast({
         title: "Registration failed",
@@ -63,6 +101,10 @@ export default function Signup() {
       });
     }
   };
+
+  if (showVerification) {
+    return <EmailVerification email={registeredEmail} />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-secondary/5 to-accent/5 px-4 py-12">
@@ -146,6 +188,24 @@ export default function Signup() {
                         />
                       </div>
                     </FormControl>
+                    {passwordStrength && (
+                      <div className="space-y-1" data-testid="password-strength-indicator">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">Password strength:</span>
+                          <span className={`font-medium ${
+                            passwordStrength.label === 'Weak' ? 'text-destructive' :
+                            passwordStrength.label === 'Medium' ? 'text-accent' :
+                            'text-secondary'
+                          }`}>
+                            {passwordStrength.label}
+                          </span>
+                        </div>
+                        <Progress value={passwordStrength.strength} className="h-1.5" />
+                      </div>
+                    )}
+                    <FormDescription className="text-xs">
+                      Must be at least 8 characters with uppercase, lowercase, and numbers
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
