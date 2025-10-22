@@ -41,10 +41,21 @@ export default function Profile() {
   };
 
   const handleSaveProfile = async () => {
+    const trimmedName = editedName.trim();
+    
+    if (trimmedName.length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "Name cannot be empty",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       await updateProfile.mutateAsync({
         userId: user.id,
-        fullName: editedName,
+        fullName: trimmedName,
       });
       toast({
         title: "Profile updated",

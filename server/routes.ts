@@ -167,8 +167,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { fullName, avatarUrl } = req.body;
       
       const updateData: any = {};
-      if (fullName !== undefined) updateData.fullName = fullName;
-      if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl;
+      
+      if (fullName !== undefined) {
+        if (typeof fullName !== "string") {
+          return res.status(400).json({ error: "Name must be a string" });
+        }
+        const trimmedName = fullName.trim();
+        if (trimmedName.length === 0) {
+          return res.status(400).json({ error: "Name cannot be empty" });
+        }
+        updateData.fullName = trimmedName;
+      }
+      
+      if (avatarUrl !== undefined) {
+        if (typeof avatarUrl !== "string") {
+          return res.status(400).json({ error: "Avatar URL must be a string" });
+        }
+        const trimmedUrl = avatarUrl.trim();
+        if (trimmedUrl.length > 0) {
+          try {
+            new URL(trimmedUrl);
+            updateData.avatarUrl = trimmedUrl;
+          } catch {
+            return res.status(400).json({ error: "Invalid avatar URL format" });
+          }
+        } else {
+          updateData.avatarUrl = trimmedUrl;
+        }
+      }
 
       if (Object.keys(updateData).length === 0) {
         return res.status(400).json({ error: "No fields to update" });
