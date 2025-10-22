@@ -13,11 +13,14 @@ export function setupSecurityMiddleware(app: Express) {
           ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
           : ["'self'"],
         styleSrc: isDevelopment 
-          ? ["'self'", "'unsafe-inline'"]
-          : ["'self'"],
+          ? ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"]
+          : ["'self'", "https://fonts.googleapis.com"],
+        styleSrcElem: isDevelopment 
+          ? ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"]
+          : ["'self'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "https:", "blob:"],
         connectSrc: ["'self'", "ws:", "wss:", "https:"],
-        fontSrc: ["'self'", "data:"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"],
