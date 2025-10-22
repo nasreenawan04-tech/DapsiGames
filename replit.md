@@ -8,6 +8,25 @@ The application provides both authenticated and guest access modes, with full fe
 
 ## Recent Changes
 
+**October 22, 2025 - Phase 4: Study Materials and Gaming Interfaces Completed**
+- Added bookmarks table to database schema with user-study material relationships
+- Implemented bookmark API endpoints (POST/DELETE /api/bookmarks/:userId/:materialId)
+- Enhanced Study Materials page with:
+  - Search functionality across titles and content
+  - Multi-level filtering (subject category, difficulty level)
+  - Tabs for All/Bookmarked/Completed materials
+  - Bookmark toggle with real-time UI updates
+  - Progress tracking with completion status
+- Enhanced Games page with:
+  - API integration loading from database
+  - Search across game titles and descriptions  
+  - Category and difficulty filtering
+  - Interactive game cards with point rewards display
+- Fixed critical bugs:
+  - apiRequest now handles 204 No Content responses without throwing errors
+  - Environment-aware SSL configuration (disabled in dev, enabled in production) for Neon database
+- Database seeded with sample study materials and games for testing
+
 **October 22, 2025 - Phase 3: Dashboard and Profile Management Completed**
 - Enhanced Profile page to use real user data from auth context instead of mock data
 - Integrated achievements display with real backend data using useAchievements hook
@@ -15,11 +34,7 @@ The application provides both authenticated and guest access modes, with full fe
 - Added PATCH /api/user/:userId/profile endpoint for updating user profiles
 - Implemented useUpdateProfile mutation hook with localStorage and auth context synchronization
 - Created functional edit profile dialog with name editing capability
-- Added comprehensive client and server-side validation:
-  - Type checking for string values
-  - Trimming and normalization of inputs
-  - Empty name prevention
-  - Avatar URL format validation
+- Added comprehensive client and server-side validation
 - Enhanced AuthProvider with user-updated event listener for real-time state sync across components
 
 ## User Preferences
@@ -78,11 +93,13 @@ Preferred communication style: Simple, everyday language.
 - **studyMaterials**: Educational content organized by title, category, difficulty, and content
 - **userActivities**: Activity log tracking study sessions and game completions with timestamps and points
 - **gameScores**: Individual game performance records linking users, games, scores, and completion times
+- **bookmarks**: User bookmarks for study materials with composite primary key (userId, materialId)
 
 **Authentication & Security:**
 - Password-based authentication with bcrypt hashing (10 salt rounds)
 - User sessions stored in localStorage on client side
 - Database credentials secured via environment variables
+- Environment-aware SSL/TLS configuration (development: relaxed, production: strict certificate validation)
 - Row-level security intended for data protection (mentioned in requirements)
 
 **Real-Time Features:**
