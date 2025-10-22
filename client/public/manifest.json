@@ -1,0 +1,22 @@
+{
+  "name": "DapsiGames",
+  "short_name": "DapsiGames",
+  "description": "Learn while you play - Competitive educational gaming platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e40af",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "games", "productivity"],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}
