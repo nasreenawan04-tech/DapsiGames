@@ -26,16 +26,21 @@ import {
 import { eq, desc, sql } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { setupWebSocket, broadcastLeaderboardUpdate } from "./websocket";
+import { healthCheck } from "./middleware/health";
+import { cacheMiddleware } from "./middleware/cache";
+import { validateRegistration, validateLogin } from "./middleware/validation";
 
 const SALT_ROUNDS = 10;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   setupWebSocket(httpServer);
+  
+  app.get("/api/health", healthCheck);
   // ===== Authentication Routes =====
   
   // Register new user
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", validateRegistration, async (req, res) => {
     try {
       const validatedData = insertUserSchema.parse(req.body);
       
@@ -74,7 +79,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Login user
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", validateLogin, async (req, res) => {
     try {
       const { email, password } = req.body;
 
@@ -127,8 +132,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get leaderboard using userStats
-  app.get("/api/leaderboard", async (req, res) => {
+  // Get leaderboard using userStats (cached for 1 minute)
+  app.get("/api/leaderboard", cacheMiddleware(60000), async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 100;
       
@@ -305,8 +310,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Game Routes =====
   
-  // Get all games
-  app.get("/api/games", async (req, res) => {
+  // Get all games (cached for 5 minutes)
+  app.get("/api/games", cacheMiddleware(), async (req, res) => {
     try {
       const allGames = await db.select().from(games);
       res.json(allGames);
@@ -437,8 +442,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Study Material Routes =====
   
-  // Get all study materials
-  app.get("/api/study", async (req, res) => {
+  // Get all study materials (cached for 5 minutes)
+  app.get("/api/study", cacheMiddleware(), async (req, res) => {
     try {
       const materials = await db.select().from(studyMaterials);
       res.json(materials);
@@ -539,8 +544,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Achievement Routes =====
   
-  // Get all achievement definitions
-  app.get("/api/achievements/definitions", async (req, res) => {
+  // Get all achievement definitions (cached for 5 minutes)
+  app.get("/api/achievements/definitions", cacheMiddleware(), async (req, res) => {
     try {
       const definitions = await db
         .select()

@@ -1,4 +1,5 @@
 import { Switch, Route } from "wouter";
+import { Suspense } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -7,20 +8,25 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { DashboardSkeleton } from "@/components/SkeletonLoader";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import ForgotPassword from "@/pages/forgot-password";
-import Dashboard from "@/pages/dashboard";
-import Leaderboard from "@/pages/leaderboard";
-import Profile from "@/pages/profile";
-import Study from "@/pages/study";
-import Games from "@/pages/games";
-import GamePlay from "@/pages/game-play";
-import Guest from "@/pages/guest";
 import AuthCallback from "@/pages/auth-callback";
 import ResetPassword from "@/pages/reset-password";
+
+import {
+  LazyDashboard,
+  LazyLeaderboard,
+  LazyProfile,
+  LazyGames,
+  LazyGamePlay,
+  LazyStudy,
+  LazyGuest,
+} from "@/lib/lazy-components";
 
 function Router() {
   const { user, logout } = useAuth();
@@ -38,22 +44,24 @@ function Router() {
         onLogout={logout}
       />
       <main className="flex-1">
-        <Switch>
-          <Route path="/" component={Home} />
-          <Route path="/login" component={Login} />
-          <Route path="/signup" component={Signup} />
-          <Route path="/forgot-password" component={ForgotPassword} />
-          <Route path="/auth/callback" component={AuthCallback} />
-          <Route path="/auth/reset-password" component={ResetPassword} />
-          <Route path="/dashboard" component={Dashboard} />
-          <Route path="/leaderboard" component={Leaderboard} />
-          <Route path="/profile" component={Profile} />
-          <Route path="/study" component={Study} />
-          <Route path="/games" component={Games} />
-          <Route path="/games/:gameId" component={GamePlay} />
-          <Route path="/guest" component={Guest} />
-          <Route component={NotFound} />
-        </Switch>
+        <Suspense fallback={<DashboardSkeleton />}>
+          <Switch>
+            <Route path="/" component={Home} />
+            <Route path="/login" component={Login} />
+            <Route path="/signup" component={Signup} />
+            <Route path="/forgot-password" component={ForgotPassword} />
+            <Route path="/auth/callback" component={AuthCallback} />
+            <Route path="/auth/reset-password" component={ResetPassword} />
+            <Route path="/dashboard" component={LazyDashboard} />
+            <Route path="/leaderboard" component={LazyLeaderboard} />
+            <Route path="/profile" component={LazyProfile} />
+            <Route path="/study" component={LazyStudy} />
+            <Route path="/games" component={LazyGames} />
+            <Route path="/games/:gameId" component={LazyGamePlay} />
+            <Route path="/guest" component={LazyGuest} />
+            <Route component={NotFound} />
+          </Switch>
+        </Suspense>
       </main>
       <Footer />
     </div>
@@ -62,15 +70,17 @@ function Router() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ThemeProvider defaultTheme="light">
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </ThemeProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <ThemeProvider defaultTheme="light">
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </ThemeProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
