@@ -14,6 +14,8 @@ interface AuthUser {
   email: string;
   fullName: string;
   avatarUrl?: string;
+  points?: number;
+  rank?: number;
 }
 
 interface AuthContextType {
