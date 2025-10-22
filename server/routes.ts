@@ -851,6 +851,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await db.insert(studyMaterials).values(materialsToSeed);
       }
 
+      // Seed achievement definitions
+      const achievementsToSeed = [
+        {
+          name: "First Steps",
+          description: "Earn your first 10 points",
+          badgeIcon: "badge-first-steps",
+          pointsRequired: 10,
+          category: "Beginner",
+        },
+        {
+          name: "Rising Star",
+          description: "Reach 100 points",
+          badgeIcon: "badge-rising-star",
+          pointsRequired: 100,
+          category: "Progress",
+        },
+        {
+          name: "Knowledge Seeker",
+          description: "Complete 5 study sessions",
+          badgeIcon: "badge-knowledge-seeker",
+          pointsRequired: 500,
+          category: "Study",
+        },
+        {
+          name: "Gaming Master",
+          description: "Win 10 games",
+          badgeIcon: "badge-gaming-master",
+          pointsRequired: 1000,
+          category: "Gaming",
+        },
+        {
+          name: "Top Performer",
+          description: "Reach the top 10 on the leaderboard",
+          badgeIcon: "badge-top-performer",
+          pointsRequired: 5000,
+          category: "Achievement",
+        },
+        {
+          name: "Legendary",
+          description: "Earn 10,000 points",
+          badgeIcon: "badge-legendary",
+          pointsRequired: 10000,
+          category: "Elite",
+        },
+      ];
+
+      const existingAchievements = await db.select().from(achievementDefinitions);
+      
+      if (existingAchievements.length === 0) {
+        await db.insert(achievementDefinitions).values(achievementsToSeed);
+      }
+
       res.json({ message: "Database seeded successfully" });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
