@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { db } from "./db";
 import { storage } from "./storage";
@@ -13,6 +13,11 @@ import {
   gameScores,
   bookmarks,
   userProgress,
+  studySessions,
+  tasks,
+  streaks,
+  badges,
+  userBadges,
   insertUserSchema,
   insertUserStatsSchema,
   insertGameSchema,
@@ -23,6 +28,11 @@ import {
   insertGameScoreSchema,
   insertBookmarkSchema,
   insertUserProgressSchema,
+  insertStudySessionSchema,
+  insertTaskSchema,
+  insertStreakSchema,
+  insertBadgeSchema,
+  insertUserBadgeSchema,
 } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -41,7 +51,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== Authentication Routes =====
   
   // Register new user
-  app.post("/api/auth/register", validateRegistration, async (req, res) => {
+  app.post("/api/auth/register", validateRegistration, async (req: Request, res: Response) => {
     try {
       const validatedData = insertUserSchema.parse(req.body);
       
@@ -80,7 +90,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Login user
-  app.post("/api/auth/login", validateLogin, async (req, res) => {
+  app.post("/api/auth/login", validateLogin, async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body;
 
@@ -785,6 +795,417 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(userStats.id, allStats[i].id));
     }
   }
+
+  // Helper function to update user streak
+  async function updateStreak(userId: string) {
+    const [userStreak] = await db
+      .select()
+      .from(streaks)
+      .where(eq(streaks.userId, userId))
+      .limit(1);
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (!userStreak) {
+      // Create new streak
+      await db.insert(streaks).values({
+        userId,
+        currentStreak: 1,
+        longestStreak: 1,
+        lastStudyDate: now,
+      });
+      return;
+    }
+
+    const lastStudy = userStreak.lastStudyDate ? new Date(userStreak.lastStudyDate) : null;
+    
+    if (!lastStudy) {
+      // First study session
+      await db
+        .update(streaks)
+        .set({
+          currentStreak: 1,
+          longestStreak: 1,
+          lastStudyDate: now,
+          updatedAt: new Date(),
+        })
+        .where(eq(streaks.userId, userId));
+      return;
+    }
+
+    const lastStudyDate = new Date(lastStudy.getFullYear(), lastStudy.getMonth(), lastStudy.getDate());
+    const daysDiff = Math.floor((today.getTime() - lastStudyDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysDiff === 0) {
+      // Same day, no change to streak
+      return;
+    } else if (daysDiff === 1) {
+      // Consecutive day, increment streak
+      const newCurrentStreak = userStreak.currentStreak + 1;
+      await db
+        .update(streaks)
+        .set({
+          currentStreak: newCurrentStreak,
+          longestStreak: Math.max(newCurrentStreak, userStreak.longestStreak),
+          lastStudyDate: now,
+          updatedAt: new Date(),
+        })
+        .where(eq(streaks.userId, userId));
+    } else {
+      // Streak broken, reset to 1
+      await db
+        .update(streaks)
+        .set({
+          currentStreak: 1,
+          lastStudyDate: now,
+          updatedAt: new Date(),
+        })
+        .where(eq(streaks.userId, userId));
+    }
+  }
+
+  // ===== Study Sessions Routes (Pomodoro Timer) =====
+  
+  // Create a new study session
+  app.post("/api/study-sessions", async (req, res) => {
+    try {
+      const validatedData = insertStudySessionSchema.parse(req.body);
+      
+      const [newSession] = await db
+        .insert(studySessions)
+        .values(validatedData)
+        .returning();
+
+      res.json(newSession);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get study sessions for a user
+  app.get("/api/study-sessions/:userId", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      const sessions = await db
+        .select()
+        .from(studySessions)
+        .where(eq(studySessions.userId, req.params.userId))
+        .orderBy(desc(studySessions.startedAt))
+        .limit(limit);
+
+      res.json(sessions);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Complete a study session and award XP
+  app.patch("/api/study-sessions/:sessionId/complete", async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      
+      // Get the session
+      const [session] = await db
+        .select()
+        .from(studySessions)
+        .where(eq(studySessions.id, sessionId))
+        .limit(1);
+
+      if (!session) {
+        return res.status(404).json({ error: "Study session not found" });
+      }
+
+      if (session.completed) {
+        return res.status(400).json({ error: "Session already completed" });
+      }
+
+      // Calculate XP based on duration (10 XP per minute)
+      const xpEarned = session.duration * 10;
+
+      // Mark session as complete
+      const [updatedSession] = await db
+        .update(studySessions)
+        .set({ 
+          completed: true, 
+          xpEarned,
+          completedAt: new Date() 
+        })
+        .where(eq(studySessions.id, sessionId))
+        .returning();
+
+      // Update user points and stats
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, session.userId))
+        .limit(1);
+
+      if (user) {
+        const newPoints = user.points + xpEarned;
+        
+        await db
+          .update(users)
+          .set({ points: newPoints })
+          .where(eq(users.id, session.userId));
+
+        await db
+          .update(userStats)
+          .set({ 
+            totalPoints: newPoints,
+            studySessions: sql`${userStats.studySessions} + 1`,
+            updatedAt: new Date()
+          })
+          .where(eq(userStats.userId, session.userId));
+
+        // Update streak
+        await updateStreak(session.userId);
+        
+        // Record activity
+        await db.insert(userActivities).values({
+          userId: session.userId,
+          activityType: "study_session",
+          activityTitle: `Completed ${session.duration} min study session`,
+          pointsEarned: xpEarned,
+        });
+
+        await updateLeaderboardRanks();
+        broadcastLeaderboardUpdate();
+      }
+
+      res.json(updatedSession);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== Tasks Routes =====
+  
+  // Get tasks for a user
+  app.get("/api/tasks/:userId", async (req, res) => {
+    try {
+      const userTasks = await db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.userId, req.params.userId))
+        .orderBy(desc(tasks.createdAt));
+
+      res.json(userTasks);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Create a new task
+  app.post("/api/tasks", async (req, res) => {
+    try {
+      const validatedData = insertTaskSchema.parse(req.body);
+      
+      const [newTask] = await db
+        .insert(tasks)
+        .values(validatedData)
+        .returning();
+
+      res.json(newTask);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Update a task
+  app.patch("/api/tasks/:taskId", async (req, res) => {
+    try {
+      const { title, description, category, priority, deadline } = req.body;
+      
+      const updateData: any = {};
+      if (title !== undefined) updateData.title = title;
+      if (description !== undefined) updateData.description = description;
+      if (category !== undefined) updateData.category = category;
+      if (priority !== undefined) updateData.priority = priority;
+      if (deadline !== undefined) updateData.deadline = deadline;
+
+      const [updatedTask] = await db
+        .update(tasks)
+        .set(updateData)
+        .where(eq(tasks.id, req.params.taskId))
+        .returning();
+
+      if (!updatedTask) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      res.json(updatedTask);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Complete a task
+  app.patch("/api/tasks/:taskId/complete", async (req, res) => {
+    try {
+      const { taskId } = req.params;
+      
+      const [task] = await db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1);
+
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      if (task.completed) {
+        return res.status(400).json({ error: "Task already completed" });
+      }
+
+      // Calculate XP with bonus for early completion
+      let totalXp = task.xpReward;
+      
+      if (task.deadline) {
+        const now = new Date();
+        const deadline = new Date(task.deadline);
+        
+        if (now < deadline) {
+          totalXp += task.bonusXp;
+        }
+      }
+
+      // Mark task as complete
+      const [updatedTask] = await db
+        .update(tasks)
+        .set({ 
+          completed: true,
+          completedAt: new Date()
+        })
+        .where(eq(tasks.id, taskId))
+        .returning();
+
+      // Update user points
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, task.userId))
+        .limit(1);
+
+      if (user) {
+        const newPoints = user.points + totalXp;
+        
+        await db
+          .update(users)
+          .set({ points: newPoints })
+          .where(eq(users.id, task.userId));
+
+        await db
+          .update(userStats)
+          .set({ 
+            totalPoints: newPoints,
+            updatedAt: new Date()
+          })
+          .where(eq(userStats.userId, task.userId));
+
+        // Record activity
+        await db.insert(userActivities).values({
+          userId: task.userId,
+          activityType: "task_completed",
+          activityTitle: task.title,
+          pointsEarned: totalXp,
+        });
+
+        await updateLeaderboardRanks();
+        broadcastLeaderboardUpdate();
+      }
+
+      res.json({ ...updatedTask, xpEarned: totalXp });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Delete a task
+  app.delete("/api/tasks/:taskId", async (req, res) => {
+    try {
+      const [deletedTask] = await db
+        .delete(tasks)
+        .where(eq(tasks.id, req.params.taskId))
+        .returning();
+
+      if (!deletedTask) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      res.json({ message: "Task deleted successfully" });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== Streaks Routes =====
+  
+  // Get streak for a user
+  app.get("/api/streaks/:userId", async (req, res) => {
+    try {
+      const [userStreak] = await db
+        .select()
+        .from(streaks)
+        .where(eq(streaks.userId, req.params.userId))
+        .limit(1);
+
+      if (!userStreak) {
+        // Create a new streak for the user
+        const [newStreak] = await db
+          .insert(streaks)
+          .values({ userId: req.params.userId })
+          .returning();
+        
+        return res.json(newStreak);
+      }
+
+      res.json(userStreak);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== Badges Routes =====
+  
+  // Get all badges
+  app.get("/api/badges", cacheMiddleware(), async (req, res) => {
+    try {
+      const allBadges = await db
+        .select()
+        .from(badges);
+
+      res.json(allBadges);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get user badges
+  app.get("/api/user-badges/:userId", async (req, res) => {
+    try {
+      const earnedBadges = await db
+        .select({
+          id: userBadges.id,
+          badgeId: userBadges.badgeId,
+          earnedAt: userBadges.earnedAt,
+          name: badges.name,
+          description: badges.description,
+          icon: badges.icon,
+          category: badges.category,
+        })
+        .from(userBadges)
+        .innerJoin(badges, eq(userBadges.badgeId, badges.id))
+        .where(eq(userBadges.userId, req.params.userId))
+        .orderBy(desc(userBadges.earnedAt));
+
+      res.json(earnedBadges);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
 
   // ===== Seed Data Route (for development) =====
   

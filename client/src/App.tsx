@@ -25,6 +25,8 @@ import {
   LazyGamePlay,
   LazyStudy,
   LazyGuest,
+  LazyPomodoro,
+  LazyTasks,
 } from "@/lib/lazy-components";
 import LeaderboardSimple from "@/pages/leaderboard-simple";
 
@@ -53,6 +55,8 @@ function Router() {
             <Route path="/auth/callback" component={AuthCallback} />
             <Route path="/auth/reset-password" component={ResetPassword} />
             <Route path="/dashboard" component={LazyDashboard} />
+            <Route path="/pomodoro" component={LazyPomodoro} />
+            <Route path="/tasks" component={LazyTasks} />
             <Route path="/leaderboard" component={LeaderboardSimple} />
             <Route path="/profile" component={LazyProfile} />
             <Route path="/study" component={LazyStudy} />

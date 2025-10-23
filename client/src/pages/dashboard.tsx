@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Trophy, Target, Award, BookOpen, Gamepad2, TrendingUp, Zap, Clock } from "lucide-react";
+import { Trophy, Target, Award, BookOpen, Gamepad2, TrendingUp, Zap, Clock, Flame, Timer, CheckCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,50 +7,72 @@ import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/lib/auth";
 import { useActivities, useLeaderboard } from "@/lib/api-hooks";
 import { formatDistanceToNow } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
+import type { Streak, Task, StudySession } from "@shared/schema";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { data: activities = [], isLoading: activitiesLoading } = useActivities(user?.id);
   const { data: leaderboard = [], isLoading: leaderboardLoading } = useLeaderboard();
   
+  // Fetch streak data
+  const { data: streak } = useQuery<Streak>({
+    queryKey: [`/api/streaks/${user?.id}`],
+    enabled: !!user,
+  });
+
+  // Fetch tasks data
+  const { data: tasks = [] } = useQuery<Task[]>({
+    queryKey: [`/api/tasks/${user?.id}`],
+    enabled: !!user,
+  });
+
+  // Fetch study sessions
+  const { data: sessions = [] } = useQuery<StudySession[]>({
+    queryKey: [`/api/study-sessions/${user?.id}`],
+    enabled: !!user,
+  });
+  
   if (!user) {
     return null;
   }
 
   const userRank = leaderboard.findIndex(u => u.id === user.id) + 1;
+  const activeTasks = tasks.filter(t => !t.completed).length;
+  const completedSessions = sessions.filter(s => s.completed).length;
 
   const stats = [
     {
-      title: "Total Points",
-      value: user.points.toLocaleString(),
+      title: "Total XP",
+      value: (user.points || 0).toLocaleString(),
       change: `${activities.length} activities`,
       icon: Trophy,
       color: "text-primary",
       bgColor: "bg-primary/10",
     },
     {
-      title: "Current Rank",
-      value: userRank > 0 ? `#${userRank}` : "Unranked",
-      change: leaderboard.length > 0 ? `Out of ${leaderboard.length}` : "Join the competition",
-      icon: TrendingUp,
-      color: "text-success",
-      bgColor: "bg-success/10",
+      title: "Current Streak",
+      value: `${streak?.currentStreak || 0} days`,
+      change: `Best: ${streak?.longestStreak || 0} days`,
+      icon: Flame,
+      color: "text-accent",
+      bgColor: "bg-accent/10",
     },
     {
-      title: "Games Played",
-      value: activities.filter(a => a.activityType === "game").length.toString(),
-      change: "Total completed",
-      icon: Gamepad2,
+      title: "Study Sessions",
+      value: completedSessions.toString(),
+      change: "Pomodoro sessions",
+      icon: Timer,
       color: "text-secondary",
       bgColor: "bg-secondary/10",
     },
     {
-      title: "Study Time",
-      value: activities.filter(a => a.activityType === "study").length.toString(),
-      change: "Materials completed",
-      icon: BookOpen,
-      color: "text-accent",
-      bgColor: "bg-accent/10",
+      title: "Active Tasks",
+      value: activeTasks.toString(),
+      change: `${tasks.length} total tasks`,
+      icon: CheckCircle,
+      color: "text-success",
+      bgColor: "bg-success/10",
     },
   ];
 
@@ -64,24 +86,24 @@ export default function Dashboard() {
 
   const quickActions = [
     {
+      title: "Pomodoro Timer",
+      description: "Start a focus session",
+      icon: Timer,
+      href: "/pomodoro",
+      color: "primary",
+    },
+    {
+      title: "Manage Tasks",
+      description: "Track your goals",
+      icon: Target,
+      href: "/tasks",
+      color: "secondary",
+    },
+    {
       title: "Study Materials",
       description: "Continue learning",
       icon: BookOpen,
       href: "/study",
-      color: "primary",
-    },
-    {
-      title: "Play Games",
-      description: "Earn more points",
-      icon: Gamepad2,
-      href: "/games",
-      color: "secondary",
-    },
-    {
-      title: "Leaderboard",
-      description: "Check your ranking",
-      icon: Trophy,
-      href: "/leaderboard",
       color: "accent",
     },
   ];
@@ -211,9 +233,9 @@ export default function Dashboard() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">Progress</span>
-                    <span className="text-sm text-muted-foreground">{user.points % 500}/500</span>
+                    <span className="text-sm text-muted-foreground">{(user.points || 0) % 500}/500</span>
                   </div>
-                  <Progress value={(user.points % 500) / 5} className="h-2" />
+                  <Progress value={((user.points || 0) % 500) / 5} className="h-2" />
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Great work! You're 68% of the way to your daily goal. Keep learning to earn the remaining points!

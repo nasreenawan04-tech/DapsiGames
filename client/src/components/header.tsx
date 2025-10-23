@@ -30,6 +30,8 @@ export function Header({ isAuthenticated = false, user, onLogout }: HeaderProps)
   const navItems = isAuthenticated
     ? [
         { path: "/dashboard", label: "Dashboard" },
+        { path: "/pomodoro", label: "Timer" },
+        { path: "/tasks", label: "Tasks" },
         { path: "/study", label: "Study" },
         { path: "/games", label: "Games" },
         { path: "/leaderboard", label: "Leaderboard" },
