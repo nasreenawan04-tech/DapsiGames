@@ -359,72 +359,88 @@ export function MathChallengeGame({
     const avgSpeed = score > 0 ? formatTime(Math.floor(timeElapsed / score)) : "N/A";
     
     return (
-      <Card className="w-full max-w-2xl mx-auto">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="h-20 w-20 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center animate-pulse">
-              <Trophy className="w-10 h-10 text-white" />
+      <Card className="w-full max-w-2xl mx-auto shadow-2xl border-2 overflow-hidden relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none" />
+        <CardHeader className="text-center relative pb-8">
+          <div className="flex justify-center mb-6">
+            <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary via-primary to-secondary flex items-center justify-center shadow-2xl ring-8 ring-primary/20 animate-pulse">
+              <Trophy className="w-12 h-12 text-white drop-shadow-2xl" />
             </div>
           </div>
-          <CardTitle data-testid="text-game-complete">Challenge Complete!</CardTitle>
-          <CardDescription>Amazing work! Here's your breakdown</CardDescription>
+          <CardTitle className="text-4xl mb-3 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent font-extrabold" data-testid="text-game-complete">
+            Challenge Complete!
+          </CardTitle>
+          <CardDescription className="text-lg">Amazing work! Here's your breakdown</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-8 relative">
           {/* Main score */}
-          <div className="text-center p-6 rounded-lg bg-gradient-to-br from-primary/10 to-secondary/10 shadow-lg">
-            <p className="text-sm text-muted-foreground mb-2">Total Points</p>
-            <div className="text-6xl font-bold text-primary mb-2 animate-pulse" data-testid="text-final-score">
+          <div className="text-center p-8 rounded-2xl bg-gradient-to-br from-primary/15 via-primary/10 to-secondary/15 shadow-2xl border-2 border-primary/30 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+            <p className="text-sm text-muted-foreground mb-3 font-semibold tracking-wide relative z-10">TOTAL POINTS</p>
+            <div className="text-7xl font-extrabold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent mb-3 drop-shadow-2xl animate-pulse relative z-10" data-testid="text-final-score">
               {totalPoints.toLocaleString()}
             </div>
-            <Badge className="text-lg px-4 py-1">
+            <Badge className="shadow-xl border-2 border-white/20 relative z-10">
               {accuracy}% Accuracy
             </Badge>
           </div>
 
           {/* Stats grid */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 rounded-lg bg-muted/30 text-center hover-elevate transition-all">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <Flame className="w-5 h-5 text-orange-500" />
-                <p className="text-sm text-muted-foreground">Best Streak</p>
+          <div className="grid grid-cols-2 gap-5">
+            <div className="p-6 rounded-xl bg-gradient-to-br from-orange-500/15 to-orange-500/5 border-2 border-orange-500/30 text-center hover-elevate transition-all shadow-lg">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Flame className="w-6 h-6 text-orange-500 drop-shadow-lg" />
+                <p className="text-sm text-muted-foreground font-semibold">Best Streak</p>
               </div>
-              <p className="text-3xl font-bold text-orange-500">{maxStreak}</p>
+              <p className="text-4xl font-extrabold text-orange-500 drop-shadow-lg">{maxStreak}</p>
             </div>
-            <div className="p-4 rounded-lg bg-muted/30 text-center hover-elevate transition-all">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <Target className="w-5 h-5 text-green-500" />
-                <p className="text-sm text-muted-foreground">Correct</p>
+            <div className="p-6 rounded-xl bg-gradient-to-br from-green-500/15 to-green-500/5 border-2 border-green-500/30 text-center hover-elevate transition-all shadow-lg">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Target className="w-6 h-6 text-green-500 drop-shadow-lg" />
+                <p className="text-sm text-muted-foreground font-semibold">Correct</p>
               </div>
-              <p className="text-3xl font-bold text-green-500">{score}/{numberOfQuestions}</p>
+              <p className="text-4xl font-extrabold text-green-500 drop-shadow-lg">{score}/{numberOfQuestions}</p>
             </div>
-            <div className="p-4 rounded-lg bg-muted/30 text-center hover-elevate transition-all">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <Clock className="w-5 h-5 text-blue-500" />
-                <p className="text-sm text-muted-foreground">Total Time</p>
+            <div className="p-6 rounded-xl bg-gradient-to-br from-blue-500/15 to-blue-500/5 border-2 border-blue-500/30 text-center hover-elevate transition-all shadow-lg">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Clock className="w-6 h-6 text-blue-500 drop-shadow-lg" />
+                <p className="text-sm text-muted-foreground font-semibold">Total Time</p>
               </div>
-              <p className="text-2xl font-bold text-blue-500">{formatTime(timeElapsed)}</p>
+              <p className="text-3xl font-extrabold text-blue-500 drop-shadow-lg">{formatTime(timeElapsed)}</p>
             </div>
-            <div className="p-4 rounded-lg bg-muted/30 text-center hover-elevate transition-all">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <Zap className="w-5 h-5 text-yellow-500" />
-                <p className="text-sm text-muted-foreground">Avg Speed</p>
+            <div className="p-6 rounded-xl bg-gradient-to-br from-yellow-500/15 to-yellow-500/5 border-2 border-yellow-500/30 text-center hover-elevate transition-all shadow-lg">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Zap className="w-6 h-6 text-yellow-500 drop-shadow-lg" />
+                <p className="text-sm text-muted-foreground font-semibold">Avg Speed</p>
               </div>
-              <p className="text-2xl font-bold text-yellow-500">{avgSpeed}</p>
+              <p className="text-3xl font-extrabold text-yellow-500 drop-shadow-lg">{avgSpeed}</p>
             </div>
           </div>
 
           {/* Performance message */}
-          <div className="text-center p-4 rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 border-2 border-primary/20">
-            <p className="font-semibold text-lg">
-              {accuracy === 100 ? "Perfect Score! You're a math genius!" :
-               accuracy >= 90 ? "Excellent! Almost perfect!" :
-               accuracy >= 75 ? "Great job! Keep it up!" :
-               accuracy >= 60 ? "Good effort! Practice makes perfect!" :
-               "Keep practicing! You'll get there!"}
-            </p>
+          <div className="text-center p-6 rounded-xl bg-gradient-to-r from-primary/15 to-secondary/15 border-2 border-primary/30 shadow-lg">
+            <div className="flex items-center justify-center gap-3">
+              {accuracy === 100 ? <Trophy className="w-6 h-6 text-yellow-500" /> :
+               accuracy >= 90 ? <Star className="w-6 h-6 text-yellow-500" /> :
+               accuracy >= 75 ? <Target className="w-6 h-6 text-green-500" /> :
+               accuracy >= 60 ? <Sparkles className="w-6 h-6 text-blue-500" /> :
+               <Zap className="w-6 h-6 text-orange-500" />}
+              <p className="font-bold text-xl bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                {accuracy === 100 ? "Perfect Score! You're a math genius!" :
+                 accuracy >= 90 ? "Excellent! Almost perfect!" :
+                 accuracy >= 75 ? "Great job! Keep it up!" :
+                 accuracy >= 60 ? "Good effort! Practice makes perfect!" :
+                 "Keep practicing! You'll get there!"}
+              </p>
+            </div>
           </div>
 
-          <Button onClick={onExit} className="w-full" data-testid="button-exit" size="lg">
+          <Button 
+            onClick={onExit} 
+            className="w-full text-lg shadow-2xl bg-gradient-to-r from-primary to-secondary transition-all font-bold" 
+            data-testid="button-exit"
+            size="lg"
+          >
             Return to Games
           </Button>
         </CardContent>
@@ -455,59 +471,64 @@ export function MathChallengeGame({
         ))}
       </div>
 
-      <Card className={`w-full max-w-2xl mx-auto transition-all duration-300 ${
+      <Card className={`w-full max-w-2xl mx-auto transition-all duration-300 shadow-2xl border-2 overflow-hidden relative ${
         shakeAnimation ? 'animate-shake' : ''
       } ${pulseAnimation ? 'scale-[1.02]' : ''}`}>
-        <CardHeader>
-          <div className="flex items-center justify-between mb-3">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none" />
+        <CardHeader className="relative">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="secondary" className="text-sm">
-                {currentProblem + 1}/{numberOfQuestions}
+              <Badge variant="secondary" className="shadow-md">
+                Question {currentProblem + 1}/{numberOfQuestions}
               </Badge>
-              <Badge variant="secondary" className="font-mono text-sm">
+              <Badge className="font-mono bg-gradient-to-r from-primary to-secondary shadow-md">
                 {totalPoints.toLocaleString()} pts
               </Badge>
               {streak >= 3 && (
-                <Badge className={`${showComboAnimation ? 'animate-bounce' : ''} bg-gradient-to-r from-orange-500 to-yellow-500 shadow-lg`}>
+                <Badge className={`${showComboAnimation ? 'animate-bounce scale-110' : ''} bg-gradient-to-r from-orange-500 to-yellow-500 shadow-lg text-white border-2 border-white/20`}>
                   {getStreakIcon()}
-                  <span className="ml-1">{streak}x Streak!</span>
+                  <span className="ml-1 font-bold">{streak}x Streak!</span>
                 </Badge>
               )}
             </div>
             {timeLimit && (
-              <div className={`flex items-center gap-2 text-sm font-mono font-bold ${
-                timeRemaining <= 10 ? "text-destructive animate-pulse" : "text-muted-foreground"
-              }`}>
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
+                timeRemaining <= 10 
+                  ? "bg-destructive/20 text-destructive animate-pulse border-2 border-destructive" 
+                  : "bg-muted text-muted-foreground"
+              } font-mono font-bold text-sm shadow-md`}>
                 <Clock className="w-4 h-4" />
                 <span data-testid="text-timer">{timeRemaining}s</span>
               </div>
             )}
           </div>
-          <Progress value={progress} className="h-2 transition-all duration-500" data-testid="progress-math" />
+          <Progress value={progress} className="h-3 transition-all duration-500 shadow-inner" data-testid="progress-math" />
         </CardHeader>
         
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 relative">
           {/* Problem display */}
-          <div className="text-center space-y-4 p-8 rounded-lg bg-gradient-to-br from-primary/5 to-secondary/5 shadow-inner">
-            <div className="flex items-center justify-center gap-2">
-              <Sparkles className="w-5 h-5 text-primary animate-pulse" />
-              <p className="text-sm text-muted-foreground font-medium">Solve this:</p>
-              <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+          <div className="text-center space-y-5 p-10 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-secondary/10 shadow-lg border border-primary/20 relative overflow-hidden">
+            <div className="absolute inset-0 bg-grid-pattern opacity-5 pointer-events-none" />
+            <div className="flex items-center justify-center gap-3 relative z-10">
+              <Sparkles className="w-6 h-6 text-primary animate-pulse drop-shadow-lg" />
+              <p className="text-base text-muted-foreground font-semibold tracking-wide">SOLVE THIS</p>
+              <Sparkles className="w-6 h-6 text-primary animate-pulse drop-shadow-lg" />
             </div>
-            <p className={`text-6xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent transition-all duration-300 ${
-              showResult && isCorrect ? 'scale-110' : ''
+            <p className={`text-7xl font-extrabold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent transition-all duration-300 drop-shadow-2xl relative z-10 ${
+              showResult && isCorrect ? 'scale-110 animate-pulse' : ''
             }`} data-testid="text-problem">
               {problem.question} = ?
             </p>
             {comboMultiplier > 1 && (
-              <Badge className="text-lg bg-gradient-to-r from-purple-500 to-pink-500 animate-pulse shadow-lg">
+              <Badge className="text-xl px-6 py-2 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 animate-pulse shadow-2xl border-2 border-white/30 relative z-10">
+                <Zap className="w-5 h-5 mr-2 inline" />
                 {comboMultiplier}x Multiplier Active!
               </Badge>
             )}
           </div>
 
           {/* Answer input */}
-          <div className="space-y-3">
+          <div className="space-y-4">
             <Input
               ref={inputRef}
               type="number"
@@ -520,35 +541,44 @@ export function MathChallengeGame({
               }}
               placeholder="Type your answer..."
               disabled={showResult}
-              className="text-center text-3xl h-20 font-bold transition-all duration-200 focus:scale-105 shadow-lg"
+              className="text-center text-3xl font-extrabold transition-all duration-200 shadow-2xl border-2 focus:border-primary rounded-xl px-6 py-8"
               data-testid="input-answer"
               autoFocus
             />
 
             {showResult && (
-              <Card className={`border-2 transition-all duration-300 transform ${
+              <Card className={`border-3 transition-all duration-300 transform shadow-2xl ${
                 isCorrect 
-                  ? "border-green-500 bg-green-500/10 scale-105" 
-                  : "border-red-500 bg-red-500/10"
+                  ? "border-green-500 bg-gradient-to-br from-green-500/20 to-green-500/10 scale-105" 
+                  : "border-red-500 bg-gradient-to-br from-red-500/20 to-red-500/10"
               }`}>
-                <CardContent className="pt-4 text-center space-y-2">
-                  <p className="text-2xl font-bold" data-testid="text-result">
+                <CardContent className="pt-6 text-center space-y-3">
+                  <p className="text-3xl font-extrabold drop-shadow-lg" data-testid="text-result">
                     {isCorrect ? "✓ Correct!" : `✗ Wrong! Answer: ${problem.answer}`}
                   </p>
                   {isCorrect && (
-                    <div className="space-y-1">
-                      <p className="text-lg text-green-600 dark:text-green-400 font-semibold animate-pulse">
+                    <div className="space-y-2">
+                      <p className="text-2xl text-green-600 dark:text-green-400 font-bold animate-pulse drop-shadow-lg">
                         +{lastPointsEarned} points
                       </p>
-                      {lastAnswerSpeed < 3000 && (
-                        <Badge className="bg-yellow-500 shadow-md">⚡ Lightning Fast!</Badge>
-                      )}
-                      {streak > 0 && streak % 5 === 0 && (
-                        <Badge className="bg-purple-500 shadow-md animate-bounce">🔥 {streak} Streak Bonus!</Badge>
-                      )}
+                      <div className="flex gap-2 justify-center flex-wrap">
+                        {lastAnswerSpeed < 3000 && (
+                          <Badge className="bg-gradient-to-r from-yellow-400 to-yellow-500 shadow-lg border-2 border-white/20">
+                            <Zap className="w-4 h-4 mr-1 inline" />
+                            Lightning Fast!
+                          </Badge>
+                        )}
+                        {streak > 0 && streak % 5 === 0 && (
+                          <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 shadow-lg animate-bounce border-2 border-white/20">
+                            <Flame className="w-4 h-4 mr-1 inline" />
+                            {streak} Streak Bonus!
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   )}
-                  <div className="text-xs text-muted-foreground mt-2">
+                  <div className="text-sm text-muted-foreground font-semibold mt-3 px-4 py-2 rounded-full bg-muted/50 inline-flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
                     {isCorrect ? "Auto-advancing in 1s..." : "Auto-advancing in 2s..."}
                   </div>
                 </CardContent>
@@ -557,26 +587,30 @@ export function MathChallengeGame({
           </div>
 
           {/* Action buttons */}
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             {!showResult ? (
               <Button 
                 onClick={handleSubmit} 
-                className="flex-1 h-12 text-lg shadow-lg hover:shadow-xl transition-all" 
+                className="flex-1 text-lg shadow-xl hover:shadow-2xl transition-all bg-gradient-to-r from-primary to-secondary font-bold" 
                 disabled={!userAnswer.trim()} 
                 data-testid="button-submit"
+                size="lg"
               >
+                <Zap className="h-5 w-5 mr-2" />
                 Submit Answer (or press Enter)
               </Button>
             ) : (
               <Button 
                 onClick={handleNext} 
-                className="flex-1 h-12 text-lg shadow-lg" 
+                className="flex-1 text-lg shadow-xl bg-gradient-to-r from-primary to-secondary font-bold transition-all" 
                 data-testid="button-next"
+                size="lg"
               >
-                {currentProblem < numberOfQuestions - 1 ? "Next Problem →" : "Finish Challenge 🏆"}
+                {currentProblem < numberOfQuestions - 1 ? "Next Problem" : "Finish Challenge"}
+                <Trophy className="h-5 w-5 ml-2" />
               </Button>
             )}
-            <Button variant="outline" onClick={onExit} data-testid="button-exit-game" className="shadow">
+            <Button variant="outline" onClick={onExit} data-testid="button-exit-game" className="shadow-lg" size="lg">
               Exit
             </Button>
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRoute, Link } from "wouter";
-import { Trophy, X, Play, RotateCcw, ArrowLeft } from "lucide-react";
+import { Trophy, X, Play, RotateCcw, ArrowLeft, Sparkles, Flame, Zap } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -254,7 +254,7 @@ export default function GamePlay() {
 
           {/* Only show intro/finished for math-quiz, regular gameplay for others */}
           {(gameId !== "math-quiz" || gameState !== "playing") && gameState === "intro" && (
-            <Card className="border-2 shadow-2xl overflow-hidden">
+            <Card className="border-2 shadow-2xl overflow-hidden relative">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none" />
               <CardHeader className="text-center relative pb-8">
                 <div className="flex justify-center mb-6">
@@ -283,16 +283,17 @@ export default function GamePlay() {
                         <Button
                           variant={selectedDifficulty === "easy" ? "default" : "outline"}
                           onClick={() => setSelectedDifficulty("easy")}
-                          className={`h-auto py-6 px-4 flex flex-col items-center gap-3 transition-all duration-300 ${
+                          className={`flex flex-col items-center gap-3 ${
                             selectedDifficulty === "easy" 
-                              ? "shadow-xl scale-105 border-2 border-primary" 
-                              : "hover:scale-105 hover:shadow-lg"
+                              ? "shadow-xl border-2 border-primary" 
+                              : ""
                           }`}
                           data-testid="button-difficulty-easy"
+                          size="lg"
                         >
-                          <span className="text-3xl drop-shadow-md">🌱</span>
+                          <Sparkles className="w-8 h-8 text-green-500 drop-shadow-md" />
                           <div>
-                            <div className="font-bold text-lg">Easy</div>
+                            <div className="font-bold text-base">Easy</div>
                             <div className="text-xs opacity-75 mt-1">10 problems</div>
                             <div className="text-xs opacity-75">90 seconds</div>
                           </div>
@@ -300,16 +301,17 @@ export default function GamePlay() {
                         <Button
                           variant={selectedDifficulty === "medium" ? "default" : "outline"}
                           onClick={() => setSelectedDifficulty("medium")}
-                          className={`h-auto py-6 px-4 flex flex-col items-center gap-3 transition-all duration-300 ${
+                          className={`flex flex-col items-center gap-3 ${
                             selectedDifficulty === "medium" 
-                              ? "shadow-xl scale-105 border-2 border-primary" 
-                              : "hover:scale-105 hover:shadow-lg"
+                              ? "shadow-xl border-2 border-primary" 
+                              : ""
                           }`}
                           data-testid="button-difficulty-medium"
+                          size="lg"
                         >
-                          <span className="text-3xl drop-shadow-md">🔥</span>
+                          <Flame className="w-8 h-8 text-orange-500 drop-shadow-md" />
                           <div>
-                            <div className="font-bold text-lg">Medium</div>
+                            <div className="font-bold text-base">Medium</div>
                             <div className="text-xs opacity-75 mt-1">15 problems</div>
                             <div className="text-xs opacity-75">120 seconds</div>
                           </div>
@@ -317,16 +319,17 @@ export default function GamePlay() {
                         <Button
                           variant={selectedDifficulty === "hard" ? "default" : "outline"}
                           onClick={() => setSelectedDifficulty("hard")}
-                          className={`h-auto py-6 px-4 flex flex-col items-center gap-3 transition-all duration-300 ${
+                          className={`flex flex-col items-center gap-3 ${
                             selectedDifficulty === "hard" 
-                              ? "shadow-xl scale-105 border-2 border-primary" 
-                              : "hover:scale-105 hover:shadow-lg"
+                              ? "shadow-xl border-2 border-primary" 
+                              : ""
                           }`}
                           data-testid="button-difficulty-hard"
+                          size="lg"
                         >
-                          <span className="text-3xl drop-shadow-md">⚡</span>
+                          <Zap className="w-8 h-8 text-yellow-500 drop-shadow-md" />
                           <div>
-                            <div className="font-bold text-lg">Hard</div>
+                            <div className="font-bold text-base">Hard</div>
                             <div className="text-xs opacity-75 mt-1">20 problems</div>
                             <div className="text-xs opacity-75">150 seconds</div>
                           </div>
@@ -363,19 +366,19 @@ export default function GamePlay() {
                     {gameId === "math-quiz" ? (
                       <>
                         <li className="flex items-start gap-3 hover-elevate p-2 rounded-lg transition-all">
-                          <span className="text-primary font-bold">⚡</span>
+                          <Zap className="w-5 h-5 text-primary flex-shrink-0" />
                           <span>Solve arithmetic problems as fast as you can</span>
                         </li>
                         <li className="flex items-start gap-3 hover-elevate p-2 rounded-lg transition-all">
-                          <span className="text-orange-500 font-bold">🔥</span>
+                          <Flame className="w-5 h-5 text-orange-500 flex-shrink-0" />
                           <span>Build streaks for bonus points and multipliers</span>
                         </li>
                         <li className="flex items-start gap-3 hover-elevate p-2 rounded-lg transition-all">
-                          <span className="text-yellow-500 font-bold">⭐</span>
+                          <Sparkles className="w-5 h-5 text-yellow-500 flex-shrink-0" />
                           <span>Speed matters - quick answers earn more points</span>
                         </li>
                         <li className="flex items-start gap-3 hover-elevate p-2 rounded-lg transition-all">
-                          <span className="text-red-500 font-bold">⏱️</span>
+                          <Trophy className="w-5 h-5 text-green-500 flex-shrink-0" />
                           <span>Watch out for the timer - beat the clock!</span>
                         </li>
                       </>
@@ -405,16 +408,17 @@ export default function GamePlay() {
                 <div className="flex gap-4 pt-4">
                   <Link href="/games">
                     <a className="flex-1">
-                      <Button variant="outline" className="w-full h-14 text-base shadow-md hover:shadow-lg transition-all" data-testid="button-back">
+                      <Button variant="outline" className="w-full text-base shadow-md hover:shadow-lg transition-all" data-testid="button-back" size="lg">
                         <ArrowLeft className="h-5 w-5 mr-2" />
                         Back to Games
                       </Button>
                     </a>
                   </Link>
                   <Button 
-                    className="flex-1 h-14 text-base shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-primary to-secondary hover:scale-105" 
+                    className="flex-1 text-base shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-primary to-secondary" 
                     onClick={startGame} 
                     data-testid="button-start"
+                    size="lg"
                   >
                     <Play className="h-5 w-5 mr-2" />
                     Start Game
