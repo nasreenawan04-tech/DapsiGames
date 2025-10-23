@@ -44,7 +44,7 @@ import {
   insertGroupChallengeSchema,
   insertGroupMessageSchema,
 } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { setupWebSocket, broadcastLeaderboardUpdate } from "./websocket";
 import { healthCheck } from "./middleware/health";
@@ -566,6 +566,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId } = req.params;
       
+      // First get the user's group memberships
+      const memberships = await db
+        .select({
+          groupId: groupMembers.groupId,
+          role: groupMembers.role,
+          joinedAt: groupMembers.joinedAt,
+        })
+        .from(groupMembers)
+        .where(eq(groupMembers.userId, userId));
+      
+      if (memberships.length === 0) {
+        return res.json([]);
+      }
+      
+      // Then get the group details with member counts
+      const groupIds = memberships.map((m: any) => m.groupId);
       const userGroups = await db
         .select({
           id: groups.id,
@@ -574,17 +590,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           avatarUrl: groups.avatarUrl,
           isPublic: groups.isPublic,
           ownerId: groups.ownerId,
-          role: groupMembers.role,
-          joinedAt: groupMembers.joinedAt,
-          memberCount: sql<number>`COUNT(DISTINCT gm.id)`,
+          memberCount: sql<number>`COUNT(DISTINCT ${groupMembers.id})`,
         })
-        .from(groupMembers)
-        .innerJoin(groups, eq(groupMembers.groupId, groups.id))
-        .leftJoin(groupMembers.as('gm'), eq(groups.id, sql`gm.group_id`))
-        .where(eq(groupMembers.userId, userId))
-        .groupBy(groups.id, groupMembers.role, groupMembers.joinedAt);
+        .from(groups)
+        .leftJoin(groupMembers, eq(groups.id, groupMembers.groupId))
+        .where(inArray(groups.id, groupIds))
+        .groupBy(groups.id);
       
-      res.json(userGroups);
+      // Combine the results
+      const result = userGroups.map((group: any) => {
+        const membership = memberships.find((m: any) => m.groupId === group.id);
+        return {
+          ...group,
+          role: membership?.role,
+          joinedAt: membership?.joinedAt,
+        };
+      });
+      
+      res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
