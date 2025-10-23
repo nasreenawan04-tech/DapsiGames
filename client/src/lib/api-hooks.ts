@@ -355,6 +355,24 @@ export function useCreateGroupChallenge() {
   });
 }
 
+export function useGroupMessages(groupId: string | null | undefined) {
+  return useQuery<any[]>({
+    queryKey: ["/api/groups", groupId, "messages"],
+    enabled: !!groupId,
+  });
+}
+
+export function useSendGroupMessage() {
+  return useMutation({
+    mutationFn: async ({ groupId, userId, message }: { groupId: string; userId: string; message: string }) => {
+      return apiRequest("POST", `/api/groups/${groupId}/messages`, { userId, message });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", variables.groupId, "messages"] });
+    },
+  });
+}
+
 // Seed data mutation
 export function useSeedDatabase() {
   return useMutation({
