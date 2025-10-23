@@ -22,6 +22,7 @@ import {
   groups,
   groupMembers,
   groupChallenges,
+  groupMessages,
   insertUserSchema,
   insertUserStatsSchema,
   insertGameSchema,
@@ -41,6 +42,7 @@ import {
   insertGroupSchema,
   insertGroupMemberSchema,
   insertGroupChallengeSchema,
+  insertGroupMessageSchema,
 } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -783,6 +785,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(desc(groupChallenges.createdAt));
       
       res.json(challenges);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Send a message to a group
+  app.post("/api/groups/:groupId/messages", async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const { userId, message } = req.body;
+
+      if (!userId || !message || !message.trim()) {
+        return res.status(400).json({ error: "User ID and message are required" });
+      }
+
+      // Verify user is a member of the group
+      const [membership] = await db
+        .select()
+        .from(groupMembers)
+        .where(sql`${groupMembers.groupId} = ${groupId} AND ${groupMembers.userId} = ${userId}`)
+        .limit(1);
+
+      if (!membership) {
+        return res.status(403).json({ error: "You must be a member to send messages" });
+      }
+
+      const validatedData = insertGroupMessageSchema.parse({
+        groupId,
+        userId,
+        message: message.trim(),
+      });
+
+      const [newMessage] = await db
+        .insert(groupMessages)
+        .values(validatedData)
+        .returning();
+
+      res.json(newMessage);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get messages for a group
+  app.get("/api/groups/:groupId/messages", async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const messages = await db
+        .select({
+          id: groupMessages.id,
+          groupId: groupMessages.groupId,
+          userId: groupMessages.userId,
+          message: groupMessages.message,
+          createdAt: groupMessages.createdAt,
+          fullName: users.fullName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(groupMessages)
+        .innerJoin(users, eq(groupMessages.userId, users.id))
+        .where(eq(groupMessages.groupId, groupId))
+        .orderBy(desc(groupMessages.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      res.json(messages.reverse()); // Reverse to show oldest first
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
