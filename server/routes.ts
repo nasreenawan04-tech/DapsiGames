@@ -508,20 +508,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Search users (for adding friends)
   app.get("/api/users/search", async (req, res) => {
     try {
-      const { query } = req.query;
+      const { query, userId } = req.query;
       
-      if (!query || typeof query !== 'string') {
-        return res.status(400).json({ error: "Search query required" });
+      if (!query || typeof query !== 'string' || query.trim().length < 2) {
+        return res.json([]);
       }
       
       const allUsers = await storage.getAllUsers();
       const lowerQuery = query.toLowerCase();
       
+      // Exclude the current user from search results
       const searchResults = allUsers
-        .filter(user => 
-          user.fullName.toLowerCase().includes(lowerQuery) || 
-          user.email.toLowerCase().includes(lowerQuery)
-        )
+        .filter(user => {
+          const matchesQuery = user.fullName.toLowerCase().includes(lowerQuery) || 
+            user.email.toLowerCase().includes(lowerQuery);
+          const notCurrentUser = userId ? user.id !== userId : true;
+          return matchesQuery && notCurrentUser;
+        })
         .slice(0, 10)
         .map(user => ({
           id: user.id,
@@ -548,14 +551,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newGroup = await storage.createGroup(validatedData);
       
       // Automatically add creator as owner
-      await storage.createGroupMember({
-        groupId: newGroup.id,
-        userId: validatedData.ownerId,
-        role: 'owner',
-      });
+      try {
+        await storage.createGroupMember({
+          groupId: newGroup.id,
+          userId: validatedData.ownerId,
+          role: 'owner',
+        });
+      } catch (memberError: any) {
+        console.error("Error adding group owner as member:", memberError);
+        // Continue even if member addition fails
+      }
       
       res.json(newGroup);
     } catch (error: any) {
+      console.error("Error creating group:", error);
       res.status(400).json({ error: error.message });
     }
   });
@@ -1545,64 +1554,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .set({ points: newPoints })
           .where(eq(users.id, session.userId));
 
-        try {
-          // Try to update stats if table exists
-          const [stats] = await db
-            .select()
-            .from(userStats)
-            .where(eq(userStats.userId, session.userId))
-            .limit(1);
-          
-          if (stats) {
-            await db
-              .update(userStats)
-              .set({ 
-                totalPoints: newPoints,
-                studySessions: (stats.studySessions || 0) + 1,
-                updatedAt: new Date()
-              })
-              .where(eq(userStats.userId, session.userId));
-          } else {
-            // Create stats if doesn't exist
-            await db.insert(userStats).values({
-              userId: session.userId,
+        // Update user stats
+        const [stats] = await db
+          .select()
+          .from(userStats)
+          .where(eq(userStats.userId, session.userId))
+          .limit(1);
+        
+        if (stats) {
+          await db
+            .update(userStats)
+            .set({ 
               totalPoints: newPoints,
-              studySessions: 1,
-            });
-          }
-        } catch (error: any) {
-          console.log("Stats update skipped:", error.message);
+              studySessions: (stats.studySessions || 0) + 1,
+              updatedAt: new Date()
+            })
+            .where(eq(userStats.userId, session.userId));
+        } else {
+          // Create stats if doesn't exist
+          await db.insert(userStats).values({
+            userId: session.userId,
+            totalPoints: newPoints,
+            studySessions: 1,
+          });
         }
 
         // Update streak
-        try {
-          await updateStreak(session.userId);
-        } catch (error: any) {
-          console.log("Streak update skipped:", error.message);
-        }
+        await updateStreak(session.userId);
         
         // Record activity
-        try {
-          await db.insert(userActivities).values({
-            userId: session.userId,
-            activityType: "study_session",
-            activityTitle: `Completed ${session.duration} min study session`,
-            pointsEarned: xpEarned,
-          });
-        } catch (error: any) {
-          console.log("Activity record skipped:", error.message);
-        }
+        await db.insert(userActivities).values({
+          userId: session.userId,
+          activityType: "study_session",
+          activityTitle: `Completed ${session.duration} min study session`,
+          pointsEarned: xpEarned,
+        });
 
-        try {
-          await updateLeaderboardRanks();
-          broadcastLeaderboardUpdate();
-        } catch (error: any) {
-          console.log("Leaderboard update skipped:", error.message);
-        }
+        await updateLeaderboardRanks();
+        broadcastLeaderboardUpdate();
       }
 
       res.json(updatedSession);
     } catch (error: any) {
+      console.error("Error completing study session:", error);
       res.status(400).json({ error: error.message });
     }
   });
@@ -1717,13 +1711,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .set({ points: newPoints })
           .where(eq(users.id, task.userId));
 
-        await db
-          .update(userStats)
-          .set({ 
+        // Update user stats
+        const [stats] = await db
+          .select()
+          .from(userStats)
+          .where(eq(userStats.userId, task.userId))
+          .limit(1);
+        
+        if (stats) {
+          await db
+            .update(userStats)
+            .set({ 
+              totalPoints: newPoints,
+              updatedAt: new Date()
+            })
+            .where(eq(userStats.userId, task.userId));
+        } else {
+          await db.insert(userStats).values({
+            userId: task.userId,
             totalPoints: newPoints,
-            updatedAt: new Date()
-          })
-          .where(eq(userStats.userId, task.userId));
+          });
+        }
 
         // Record activity
         await db.insert(userActivities).values({
@@ -1739,6 +1747,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ ...updatedTask, xpEarned: totalXp });
     } catch (error: any) {
+      console.error("Error completing task:", error);
       res.status(400).json({ error: error.message });
     }
   });

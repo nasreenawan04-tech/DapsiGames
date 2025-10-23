@@ -10,7 +10,8 @@ export function connectWebSocket() {
   if (ws?.readyState === WebSocket.OPEN) return;
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${protocol}//${window.location.host}/ws`;
+  const host = window.location.host;
+  const wsUrl = `${protocol}//${host}/ws`;
   
   try {
     ws = new WebSocket(wsUrl);
@@ -135,10 +136,17 @@ export function useRemoveFriend() {
   });
 }
 
-export function useSearchUsers(query: string) {
+export function useSearchUsers(query: string, userId?: string) {
   return useQuery<any[]>({
-    queryKey: ["/api/users/search", query],
-    enabled: query.length > 0,
+    queryKey: ["/api/users/search", { query, userId }],
+    queryFn: async () => {
+      const params = new URLSearchParams({ query });
+      if (userId) params.append("userId", userId);
+      const response = await fetch(`/api/users/search?${params}`);
+      if (!response.ok) throw new Error("Failed to search users");
+      return response.json();
+    },
+    enabled: query.length >= 2,
   });
 }
 

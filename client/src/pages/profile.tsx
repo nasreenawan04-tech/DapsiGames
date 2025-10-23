@@ -34,14 +34,17 @@ export default function Profile() {
   const rejectRequest = useRejectFriendRequest();
   const removeFriend = useRemoveFriend();
   const { toast } = useToast();
-  
+
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [isAddFriendDialogOpen, setIsAddFriendDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const { data: searchResults = [] } = useSearchUsers(searchQuery);
+  const { data: searchResults = [], isLoading: searchLoading } = useSearchUsers(
+    searchQuery,
+    user?.id
+  );
 
   if (!user) {
     return null;
@@ -59,7 +62,7 @@ export default function Profile() {
 
   const handleSaveProfile = async () => {
     const trimmedName = editedName.trim();
-    
+
     if (trimmedName.length === 0) {
       toast({
         title: "Validation Error",
@@ -68,7 +71,7 @@ export default function Profile() {
       });
       return;
     }
-    
+
     try {
       await updateProfile.mutateAsync({
         userId: user.id,
@@ -90,7 +93,7 @@ export default function Profile() {
 
   const handleSaveAvatar = async () => {
     const trimmedUrl = avatarUrl.trim();
-    
+
     if (trimmedUrl.length > 0) {
       try {
         new URL(trimmedUrl);
@@ -103,7 +106,7 @@ export default function Profile() {
         return;
       }
     }
-    
+
     try {
       await updateProfile.mutateAsync({
         userId: user.id,
@@ -444,7 +447,7 @@ export default function Profile() {
                     </div>
                   </div>
                 )}
-                
+
                 {friendsLoading ? (
                   <div className="text-center py-8 text-muted-foreground">Loading friends...</div>
                 ) : friends.length === 0 ? (
@@ -656,7 +659,7 @@ export default function Profile() {
                 data-testid="input-search-users"
               />
             </div>
-            
+
             {searchQuery && (
               <div className="max-h-64 overflow-y-auto space-y-2">
                 {searchResults.length === 0 ? (
