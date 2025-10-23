@@ -162,6 +162,22 @@ export default function GamePlay() {
     );
   }
 
+  if (!game.questions || game.questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card>
+          <CardContent className="p-8 text-center">
+            <h2 className="text-2xl font-bold mb-4">No Questions Available</h2>
+            <p className="text-muted-foreground mb-4">This game doesn't have questions set up yet.</p>
+            <Link href="/games">
+              <Button>Back to Games</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const question = game.questions[currentQuestion];
 
   return (

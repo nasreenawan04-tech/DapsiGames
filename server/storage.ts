@@ -105,7 +105,7 @@ export class MemStorage implements IStorage {
   private seedInitialData(): void {
     const sampleGames: Game[] = [
       {
-        id: randomUUID(),
+        id: 'math-quiz',
         title: 'Math Blitz',
         description: 'Test your arithmetic skills with rapid-fire math problems. Answer as many as you can before time runs out!',
         difficulty: 'Easy',
@@ -115,7 +115,7 @@ export class MemStorage implements IStorage {
         instructions: 'Solve math problems as quickly as possible. Each correct answer earns you points. You have 60 seconds!'
       },
       {
-        id: randomUUID(),
+        id: 'word-scramble',
         title: 'Word Scramble',
         description: 'Unscramble letters to form valid words. Perfect for improving vocabulary and spelling.',
         difficulty: 'Easy',
@@ -125,7 +125,7 @@ export class MemStorage implements IStorage {
         instructions: 'Rearrange the scrambled letters to form a valid word. Hint: words are related to common topics.'
       },
       {
-        id: randomUUID(),
+        id: 'science-trivia',
         title: 'Chemistry Quiz',
         description: 'Challenge your knowledge of the periodic table, chemical reactions, and molecular structures.',
         difficulty: 'Medium',
@@ -135,7 +135,7 @@ export class MemStorage implements IStorage {
         instructions: 'Answer multiple choice questions about chemistry concepts. Each correct answer adds to your score!'
       },
       {
-        id: randomUUID(),
+        id: 'geography-quest',
         title: 'Geography Challenge',
         description: 'Test your knowledge of world capitals, countries, and landmarks.',
         difficulty: 'Medium',
@@ -145,7 +145,7 @@ export class MemStorage implements IStorage {
         instructions: 'Identify countries, capitals, and geographical features. Explore the world from your screen!'
       },
       {
-        id: randomUUID(),
+        id: 'code-breaker',
         title: 'Code Breaker',
         description: 'Solve programming logic puzzles and algorithm challenges.',
         difficulty: 'Hard',
@@ -155,7 +155,7 @@ export class MemStorage implements IStorage {
         instructions: 'Analyze code snippets and determine the output or fix bugs. Test your programming knowledge!'
       },
       {
-        id: randomUUID(),
+        id: 'history-timeline',
         title: 'History Timeline',
         description: 'Arrange historical events in chronological order to test your knowledge of world history.',
         difficulty: 'Medium',
