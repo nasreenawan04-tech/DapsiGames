@@ -19,6 +19,10 @@ import {
   type UserBadge,
 } from "@shared/schema";
 import { eq, sql, and, gte } from "drizzle-orm";
+import WebSocket from "ws"; // Assuming wss is a WebSocket server instance
+
+// Mock WebSocket server for demonstration purposes
+const wss = new WebSocket.Server({ noServer: true });
 
 // XP and Level Constants
 const XP_PER_STUDY_MINUTE = 2; // 2 XP per minute of study
@@ -44,16 +48,16 @@ export function calculateTaskCompletionXP(
   priority: string
 ): number {
   let xp = baseXP || XP_PER_TASK_COMPLETED;
-  
+
   // Apply priority multiplier
   const priorityMultipliers = { low: 1, medium: 1.2, high: 1.5 };
   xp *= priorityMultipliers[priority as keyof typeof priorityMultipliers] || 1;
-  
+
   // Apply early completion bonus
   if (isEarlyCompletion) {
     xp *= EARLY_COMPLETION_BONUS_MULTIPLIER;
   }
-  
+
   return Math.floor(xp);
 }
 
@@ -67,12 +71,12 @@ export async function getLevelFromXP(totalXP: number): Promise<{
   progress: number;
 }> {
   const levelList = await db.select().from(levels).orderBy(levels.levelNumber);
-  
+
   // Find current level
   let currentLevel = 1;
   let currentLevelRequirement = 0;
   let nextLevelRequirement = 100; // Default for level 2
-  
+
   for (let i = 0; i < levelList.length; i++) {
     if (totalXP >= levelList[i].xpRequired) {
       currentLevel = levelList[i].levelNumber;
@@ -82,11 +86,11 @@ export async function getLevelFromXP(totalXP: number): Promise<{
       break;
     }
   }
-  
+
   const xpInCurrentLevel = totalXP - currentLevelRequirement;
   const xpNeededForNextLevel = nextLevelRequirement - currentLevelRequirement;
   const progress = Math.min(100, Math.floor((xpInCurrentLevel / xpNeededForNextLevel) * 100));
-  
+
   return {
     level: currentLevel,
     currentLevelXP: xpInCurrentLevel,
@@ -113,32 +117,32 @@ export async function awardXP(
     .from(userLevels)
     .where(eq(userLevels.userId, userId))
     .limit(1);
-  
+
   if (!userLevel) {
     [userLevel] = await db
       .insert(userLevels)
       .values({ userId })
       .returning();
   }
-  
+
   const oldTotalXP = userLevel.totalXp;
   const newTotalXP = oldTotalXP + xpAmount;
-  
+
   // Get old and new level info
   const oldLevelInfo = await getLevelFromXP(oldTotalXP);
   const newLevelInfo = await getLevelFromXP(newTotalXP);
-  
+
   const leveledUp = newLevelInfo.level > oldLevelInfo.level;
   let coinsEarned = 0;
-  
+
   if (leveledUp) {
     const levelsGained = newLevelInfo.level - oldLevelInfo.level;
     coinsEarned = levelsGained * COINS_PER_LEVEL;
-    
+
     // Award coins
     await awardCoins(userId, coinsEarned, "Level up reward");
   }
-  
+
   // Update user level
   await db
     .update(userLevels)
@@ -149,7 +153,7 @@ export async function awardXP(
       updatedAt: new Date(),
     })
     .where(eq(userLevels.userId, userId));
-  
+
   // Also update user stats total points
   await db
     .update(userStats)
@@ -158,13 +162,16 @@ export async function awardXP(
       updatedAt: new Date(),
     })
     .where(eq(userStats.userId, userId));
-  
+
   // Also update legacy points in users table
   await db
     .update(users)
     .set({ points: newTotalXP })
     .where(eq(users.id, userId));
-  
+
+  // Broadcast points earned
+  broadcastPointsEarned(userId, xpAmount, "XP earned");
+
   return {
     newTotalXP,
     leveledUp,
@@ -187,14 +194,14 @@ export async function awardCoins(
     .from(userCoins)
     .where(eq(userCoins.userId, userId))
     .limit(1);
-  
+
   if (!userCoinsRecord) {
     [userCoinsRecord] = await db
       .insert(userCoins)
       .values({ userId })
       .returning();
   }
-  
+
   // Update coins
   const [updated] = await db
     .update(userCoins)
@@ -205,7 +212,10 @@ export async function awardCoins(
     })
     .where(eq(userCoins.userId, userId))
     .returning();
-  
+
+  // Broadcast coins earned
+  broadcastPointsEarned(userId, amount, reason);
+
   return updated;
 }
 
@@ -221,15 +231,15 @@ export async function spendCoins(
     .from(userCoins)
     .where(eq(userCoins.userId, userId))
     .limit(1);
-  
+
   if (!userCoinsRecord) {
     return { success: false, error: "User coins record not found" };
   }
-  
+
   if (userCoinsRecord.balance < amount) {
     return { success: false, error: "Insufficient coins" };
   }
-  
+
   const [updated] = await db
     .update(userCoins)
     .set({
@@ -239,7 +249,7 @@ export async function spendCoins(
     })
     .where(eq(userCoins.userId, userId))
     .returning();
-  
+
   return { success: true, newBalance: updated.balance };
 }
 
@@ -255,14 +265,14 @@ export async function updateStreak(userId: string): Promise<{
 }> {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
+
   // Get or create streak record
   let [streakRecord] = await db
     .select()
     .from(streaks)
     .where(eq(streaks.userId, userId))
     .limit(1);
-  
+
   if (!streakRecord) {
     [streakRecord] = await db
       .insert(streaks)
@@ -272,16 +282,16 @@ export async function updateStreak(userId: string): Promise<{
       })
       .returning();
   }
-  
+
   const lastStudyDate = streakRecord.lastStudyDate
     ? new Date(streakRecord.lastStudyDate)
     : null;
-  
+
   let currentStreak = streakRecord.currentStreak;
   let streakMaintained = true;
   let coinsEarned: number | undefined;
   let badgeEarned: Badge | undefined;
-  
+
   if (!lastStudyDate) {
     // First study session ever
     currentStreak = 1;
@@ -289,14 +299,14 @@ export async function updateStreak(userId: string): Promise<{
     const daysSinceLastStudy = Math.floor(
       (today.getTime() - lastStudyDate.getTime()) / (1000 * 60 * 60 * 24)
     );
-    
+
     if (daysSinceLastStudy === 0) {
       // Studied today already, no change
       streakMaintained = true;
     } else if (daysSinceLastStudy === 1) {
       // Consecutive day
       currentStreak += 1;
-      
+
       // Check for streak milestone rewards
       if (currentStreak === 7) {
         coinsEarned = STREAK_MILESTONE_COINS[0];
@@ -311,7 +321,7 @@ export async function updateStreak(userId: string): Promise<{
         coinsEarned = STREAK_MILESTONE_COINS[3];
         await awardCoins(userId, coinsEarned, "100-day streak milestone");
       }
-      
+
       // Check for streak badges
       if (currentStreak === 5) {
         badgeEarned = await awardBadgeByRequirement(userId, "5-day-streak");
@@ -326,10 +336,10 @@ export async function updateStreak(userId: string): Promise<{
       streakMaintained = false;
     }
   }
-  
+
   // Update longest streak if current exceeds it
   const longestStreak = Math.max(currentStreak, streakRecord.longestStreak);
-  
+
   // Update streak record
   await db
     .update(streaks)
@@ -340,7 +350,7 @@ export async function updateStreak(userId: string): Promise<{
       updatedAt: new Date(),
     })
     .where(eq(streaks.userId, userId));
-  
+
   return {
     currentStreak,
     longestStreak,
@@ -363,11 +373,11 @@ export async function awardBadgeByRequirement(
     .from(badges)
     .where(eq(badges.requirement, requirement))
     .limit(1);
-  
+
   if (!badgeDefinition) {
     return undefined;
   }
-  
+
   // Check if user already has this badge
   const [existingUserBadge] = await db
     .select()
@@ -379,17 +389,17 @@ export async function awardBadgeByRequirement(
       )
     )
     .limit(1);
-  
+
   if (existingUserBadge) {
     return undefined; // Already has badge
   }
-  
+
   // Award badge
   await db.insert(userBadges).values({
     userId,
     badgeId: badgeDefinition.id,
   });
-  
+
   return badgeDefinition;
 }
 
@@ -402,11 +412,11 @@ export async function checkAndAwardAchievements(userId: string): Promise<Badge[]
     .from(userStats)
     .where(eq(userStats.userId, userId))
     .limit(1);
-  
+
   if (!stats) return [];
-  
+
   const newBadges: Badge[] = [];
-  
+
   // Check games played achievements
   if (stats.gamesPlayed >= 10) {
     const badge = await awardBadgeByRequirement(userId, "game-master-10");
@@ -416,7 +426,7 @@ export async function checkAndAwardAchievements(userId: string): Promise<Badge[]
     const badge = await awardBadgeByRequirement(userId, "game-master-50");
     if (badge) newBadges.push(badge);
   }
-  
+
   // Check study sessions achievements
   if (stats.studySessions >= 10) {
     const badge = await awardBadgeByRequirement(userId, "focus-master-10");
@@ -426,7 +436,7 @@ export async function checkAndAwardAchievements(userId: string): Promise<Badge[]
     const badge = await awardBadgeByRequirement(userId, "focus-master-50");
     if (badge) newBadges.push(badge);
   }
-  
+
   // Check total points achievements
   if (stats.totalPoints >= 1000) {
     const badge = await awardBadgeByRequirement(userId, "scholar-1000");
@@ -440,7 +450,7 @@ export async function checkAndAwardAchievements(userId: string): Promise<Badge[]
     const badge = await awardBadgeByRequirement(userId, "scholar-10000");
     if (badge) newBadges.push(badge);
   }
-  
+
   return newBadges;
 }
 
@@ -450,7 +460,7 @@ export async function checkAndAwardAchievements(userId: string): Promise<Badge[]
 export async function initializeLevels(): Promise<void> {
   const existingLevels = await db.select().from(levels).limit(1);
   if (existingLevels.length > 0) return; // Already initialized
-  
+
   const levelDefinitions = [
     { levelNumber: 1, xpRequired: 0, title: "Novice", rewards: JSON.stringify({ coins: 0 }) },
     { levelNumber: 2, xpRequired: 100, title: "Learner", rewards: JSON.stringify({ coins: 100 }) },
@@ -463,7 +473,7 @@ export async function initializeLevels(): Promise<void> {
     { levelNumber: 9, xpRequired: 7500, title: "Legend", rewards: JSON.stringify({ coins: 200 }) },
     { levelNumber: 10, xpRequired: 10000, title: "Grandmaster", rewards: JSON.stringify({ coins: 250 }) },
   ];
-  
+
   await db.insert(levels).values(levelDefinitions);
 }
 
@@ -473,7 +483,7 @@ export async function initializeLevels(): Promise<void> {
 export async function initializeBadges(): Promise<void> {
   const existingBadges = await db.select().from(badges).limit(1);
   if (existingBadges.length > 0) return; // Already initialized
-  
+
   const badgeDefinitions = [
     {
       name: "5-Day Streak",
@@ -553,6 +563,21 @@ export async function initializeBadges(): Promise<void> {
       category: "achievement",
     },
   ];
-  
+
   await db.insert(badges).values(badgeDefinitions);
+}
+
+// Broadcast points earned to connected WebSocket clients
+export function broadcastPointsEarned(userId: string, points: number, reason: string) {
+  wss.clients.forEach((client) => {
+    if (client.readyState === 1) {
+      client.send(JSON.stringify({
+        type: "points_earned",
+        userId,
+        points,
+        reason,
+        timestamp: new Date(),
+      }));
+    }
+  });
 }

@@ -38,8 +38,10 @@ export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserById(userId: string): Promise<User | null>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPoints(userId: string, points: number): Promise<User>;
+  addUserPoints(userId: string, points: number): Promise<User | null>;
   getAllUsers(): Promise<User[]>;
 
   // User Stats methods
@@ -70,6 +72,7 @@ export interface IStorage {
   // User Activity methods
   getUserActivities(userId: string): Promise<UserActivity[]>;
   createUserActivity(activity: InsertUserActivity): Promise<UserActivity>;
+  createActivity(data: InsertUserActivity): Promise<UserActivity>;
 
   // Game Score methods
   getUserGameScores(userId: string, gameId?: string): Promise<GameScore[]>;
@@ -92,19 +95,26 @@ export interface IStorage {
   createTask(task: InsertTask): Promise<Task>;
   updateTask(taskId: string, updates: Partial<Task>): Promise<Task>;
   deleteTask(taskId: string): Promise<void>;
+  completeTask(taskId: string): Promise<Task | null>;
 
   // StudySession methods
   getUserStudySessions(userId: string): Promise<StudySession[]>;
   getStudySession(id: string): Promise<StudySession | undefined>;
   createStudySession(session: InsertStudySession): Promise<StudySession>;
   updateStudySession(sessionId: string, updates: Partial<StudySession>): Promise<StudySession>;
+  completeStudySession(sessionId: string): Promise<StudySession | null>;
 
   // Friendship methods
   getUserFriendships(userId: string): Promise<Friendship[]>;
-  getFriendship(id: string): Promise<Friendship | undefined>;
-  createFriendship(friendship: InsertFriendship): Promise<Friendship>;
-  updateFriendship(friendshipId: string, updates: Partial<Friendship>): Promise<Friendship>;
+  getFriendship(userId: string, friendId: string): Promise<Friendship | null>;
+  checkFriendship(userId: string, friendId: string): Promise<Friendship | null>;
+  createFriendRequest(userId: string, friendId: string): Promise<Friendship>;
+  acceptFriendRequest(requestId: string): Promise<Friendship | null>;
+  rejectFriendRequest(requestId: string): Promise<Friendship | null>;
+  removeFriend(userId: string, friendId: string): Promise<void>;
+  updateFriendship(friendshipId: string, data: Partial<Friendship>): Promise<Friendship | null>;
   deleteFriendship(friendshipId: string): Promise<void>;
+
 
   // Group methods
   getGroup(id: string): Promise<Group | undefined>;
@@ -116,26 +126,13 @@ export interface IStorage {
   // GroupMember methods
   getGroupMembers(groupId: string): Promise<GroupMember[]>;
   createGroupMember(member: InsertGroupMember): Promise<GroupMember>;
+  joinGroup(groupId: string, userId: string): Promise<GroupMember>;
   deleteGroupMember(groupId: string, userId: string): Promise<void>;
 
   // Streak methods
   getUserStreak(userId: string): Promise<Streak | undefined>;
   createStreak(streak: InsertStreak): Promise<Streak>;
   updateStreak(userId: string, updates: Partial<Streak>): Promise<Streak>;
-
-  // New methods for friends, tasks, study sessions
-  getUserFriends(userId: string): Promise<any[]>;
-  getFriendRequests(userId: string): Promise<any[]>;
-  checkFriendship(userId: string, friendId: string): Promise<Friendship | null>;
-  createFriendRequest(userId: string, friendId: string): Promise<Friendship>;
-  acceptFriendRequest(requestId: string): Promise<Friendship | null>;
-  rejectFriendRequest(requestId: string): Promise<Friendship | null>;
-  removeFriend(userId: string, friendId: string): Promise<void>;
-  createTask(data: InsertTask): Promise<Task>;
-  updateTask(taskId: string, data: Partial<InsertTask>): Promise<Task | null>;
-  completeTask(taskId: string): Promise<Task | null>;
-  deleteTask(taskId: string): Promise<void>;
-  completeStudySession(sessionId: string): Promise<StudySession | null>;
 
   // Pomodoro Timer methods (assuming these would be added to IStorage)
   getStudySessionByUserIdAndStatus(userId: string, completed: boolean): Promise<StudySession | undefined>;
@@ -261,6 +258,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.users.values()).find((user) => user.email === email);
   }
 
+  async getUserById(userId: string): Promise<User | null> {
+    return this.users.get(userId) || null;
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
     const user: User = {
@@ -287,6 +288,18 @@ export class MemStorage implements IStorage {
     this.users.set(userId, user);
     await this.updateLeaderboardRanks();
     return user;
+  }
+
+  async addUserPoints(userId: string, points: number): Promise<User | null> {
+    const user = this.users.get(userId);
+    if (!user) return null;
+
+    const updated: User = {
+      ...user,
+      points: user.points + points,
+    };
+    this.users.set(userId, updated);
+    return updated;
   }
 
   async getAllUsers(): Promise<User[]> {
@@ -435,6 +448,17 @@ export class MemStorage implements IStorage {
     return activity;
   }
 
+  async createActivity(data: InsertUserActivity): Promise<UserActivity> {
+    const id = randomUUID();
+    const activity: UserActivity = {
+      ...data,
+      id,
+      timestamp: new Date(),
+    };
+    this.userActivities.set(id, activity);
+    return activity;
+  }
+
   // Game Score methods
   async getUserGameScores(userId: string, gameId?: string): Promise<GameScore[]> {
     return Array.from(this.gameScores.values()).filter(
@@ -573,6 +597,18 @@ export class MemStorage implements IStorage {
     this.tasks.delete(taskId);
   }
 
+  async completeTask(taskId: string): Promise<Task | null> {
+    const task = this.tasks.get(taskId);
+    if (!task) return null;
+    const updated: Task = {
+      ...task,
+      completed: true,
+      completedAt: new Date(),
+    };
+    this.tasks.set(taskId, updated);
+    return updated;
+  }
+
   // StudySession methods
   async getUserStudySessions(userId: string): Promise<StudySession[]> {
     return Array.from(this.studySessions.values())
@@ -610,23 +646,56 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
+  async completeStudySession(sessionId: string): Promise<StudySession | null> {
+    const session = this.studySessions.get(sessionId);
+    if (!session) return null;
+
+    const xpEarned = session.duration * 10; // 10 XP per minute
+    const updated: StudySession = {
+      ...session,
+      completed: true,
+      completedAt: new Date(),
+      xpEarned,
+    };
+    this.studySessions.set(sessionId, updated);
+
+    // Update user stats and streak
+    const userStats = await this.getUserStats(session.userId);
+    if (userStats) {
+      await this.updateUserStats(session.userId, {
+        studySessions: userStats.studySessions + 1,
+        totalPoints: userStats.totalPoints + xpEarned,
+      });
+    }
+    await this.updateStreak(session.userId);
+
+    return updated;
+  }
+
   // Friendship methods
   async getUserFriendships(userId: string): Promise<Friendship[]> {
     return Array.from(this.friendships.values()).filter(
-      (friendship) =>
-        friendship.userId === userId || friendship.friendId === userId
+      (f) => f.userId === userId || f.friendId === userId
     );
   }
 
-  async getFriendship(id: string): Promise<Friendship | undefined> {
-    return this.friendships.get(id);
+  async getFriendship(userId: string, friendId: string): Promise<Friendship | null> {
+    return Array.from(this.friendships.values()).find(
+      (f) => (f.userId === userId && f.friendId === friendId) ||
+             (f.userId === friendId && f.friendId === userId)
+    ) || null;
   }
 
-  async createFriendship(insertFriendship: InsertFriendship): Promise<Friendship> {
+  async checkFriendship(userId: string, friendId: string): Promise<Friendship | null> {
+    return this.getFriendship(userId, friendId);
+  }
+
+  async createFriendRequest(userId: string, friendId: string): Promise<Friendship> {
     const id = randomUUID();
     const friendship: Friendship = {
-      ...insertFriendship,
       id,
+      userId,
+      friendId,
       status: "pending",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -635,13 +704,13 @@ export class MemStorage implements IStorage {
     return friendship;
   }
 
-  async updateFriendship(friendshipId: string, updates: Partial<Friendship>): Promise<Friendship> {
+  async updateFriendship(friendshipId: string, data: Partial<Friendship>): Promise<Friendship | null> {
     const friendship = this.friendships.get(friendshipId);
-    if (!friendship) throw new Error("Friendship not found");
+    if (!friendship) return null;
 
     const updated: Friendship = {
       ...friendship,
-      ...updates,
+      ...data,
       updatedAt: new Date(),
     };
     this.friendships.set(friendshipId, updated);
@@ -650,6 +719,85 @@ export class MemStorage implements IStorage {
 
   async deleteFriendship(friendshipId: string): Promise<void> {
     this.friendships.delete(friendshipId);
+  }
+
+  async getUserFriends(userId: string): Promise<any[]> {
+    const friendships = Array.from(this.friendships.values()).filter(
+      (f) => (f.userId === userId || f.friendId === userId) && f.status === "accepted"
+    );
+    return friendships.map(f => {
+      const friendId = f.userId === userId ? f.friendId : f.userId;
+      const friend = this.users.get(friendId);
+      if (!friend) return null;
+      return {
+        id: f.id,
+        userId: f.userId,
+        friendId: f.friendId,
+        status: f.status,
+        createdAt: f.createdAt,
+        friendName: friend.fullName,
+        friendEmail: friend.email,
+        friendPoints: friend.points,
+        friendAvatarUrl: friend.avatarUrl,
+      };
+    }).filter(f => f !== null);
+  }
+
+  async getFriendRequests(userId: string): Promise<any[]> {
+    const friendships = Array.from(this.friendships.values()).filter(
+      (f) => f.friendId === userId && f.status === "pending"
+    );
+    return friendships.map(f => {
+      const sender = this.users.get(f.userId);
+      if (!sender) return null;
+      return {
+        id: f.id,
+        userId: f.userId,
+        friendId: f.friendId,
+        status: f.status,
+        createdAt: f.createdAt,
+        senderName: sender.fullName,
+        senderEmail: sender.email,
+        senderAvatarUrl: sender.avatarUrl,
+      };
+    }).filter(f => f !== null);
+  }
+
+  async acceptFriendRequest(requestId: string): Promise<Friendship | null> {
+    const friendship = this.friendships.get(requestId);
+    if (!friendship || friendship.status !== "pending") return null;
+
+    const updated: Friendship = {
+      ...friendship,
+      status: "accepted",
+      updatedAt: new Date(),
+    };
+    this.friendships.set(requestId, updated);
+    return updated;
+  }
+
+  async rejectFriendRequest(requestId: string): Promise<Friendship | null> {
+    const friendship = this.friendships.get(requestId);
+    if (!friendship || friendship.status !== "pending") return null;
+
+    const updated: Friendship = {
+      ...friendship,
+      status: "rejected",
+      updatedAt: new Date(),
+    };
+    this.friendships.set(requestId, updated);
+    return updated;
+  }
+
+  async removeFriend(userId: string, friendId: string): Promise<void> {
+    const friendship = Array.from(this.friendships.values()).find(
+      (f) =>
+        (f.userId === userId && f.friendId === friendId && f.status === "accepted") ||
+        (f.userId === friendId && f.friendId === userId && f.status === "accepted")
+    );
+    if (friendship) {
+      this.friendships.delete(friendship.id);
+    }
   }
 
   // Group methods
@@ -662,13 +810,12 @@ export class MemStorage implements IStorage {
   }
 
   async getUserGroups(userId: string): Promise<Group[]> {
-    const userMemberships = Array.from(this.groupMembers.values()).filter(
-      (member) => member.userId === userId
-    );
-    const groupIds = userMemberships.map((m) => m.groupId);
-    return Array.from(this.groups.values()).filter((g) =>
-      groupIds.includes(g.id)
-    );
+    const memberOf = Array.from(this.groupMembers.values())
+      .filter(m => m.userId === userId)
+      .map(m => m.groupId);
+
+    return Array.from(this.groups.values())
+      .filter(g => memberOf.includes(g.id));
   }
 
   async createGroup(insertGroup: InsertGroup): Promise<Group> {
@@ -698,9 +845,7 @@ export class MemStorage implements IStorage {
 
   // GroupMember methods
   async getGroupMembers(groupId: string): Promise<GroupMember[]> {
-    return Array.from(this.groupMembers.values()).filter(
-      (member) => member.groupId === groupId
-    );
+    return Array.from(this.groupMembers.values()).filter((m) => m.groupId === groupId);
   }
 
   async createGroupMember(insertMember: InsertGroupMember): Promise<GroupMember> {
@@ -708,6 +853,19 @@ export class MemStorage implements IStorage {
     const member: GroupMember = {
       ...insertMember,
       id,
+      joinedAt: new Date(),
+    };
+    this.groupMembers.set(id, member);
+    return member;
+  }
+
+  async joinGroup(groupId: string, userId: string): Promise<GroupMember> {
+    const id = randomUUID();
+    const member: GroupMember = {
+      id,
+      groupId,
+      userId,
+      role: "member",
       joinedAt: new Date(),
     };
     this.groupMembers.set(id, member);
@@ -802,208 +960,6 @@ export class MemStorage implements IStorage {
     await this.updateStreak(session.userId); // This method will handle the logic for updating streak
 
     return updated;
-  }
-
-  // Existing methods for friends, tasks, study sessions
-  async getUserStudySessions(userId: string): Promise<StudySession[]> {
-    return Array.from(this.studySessions.values()).filter(
-      (session) => session.userId === userId
-    );
-  }
-
-  async createStudySession(data: InsertStudySession): Promise<StudySession> {
-    const id = randomUUID();
-    const session: StudySession = {
-      ...data,
-      id,
-      xpEarned: 0,
-      completed: false,
-      startedAt: new Date(),
-      completedAt: null,
-    };
-    this.studySessions.set(id, session);
-    return session;
-  }
-
-  async completeStudySession(sessionId: string): Promise<StudySession | null> {
-    const session = this.studySessions.get(sessionId);
-    if (!session) return null;
-
-    const xpEarned = session.duration * 10; // 10 XP per minute
-    const updated: StudySession = {
-      ...session,
-      completed: true,
-      completedAt: new Date(),
-      xpEarned,
-    };
-    this.studySessions.set(sessionId, updated);
-
-    // Update user stats and streak
-    const userStats = await this.getUserStats(session.userId);
-    if (userStats) {
-      await this.updateUserStats(session.userId, {
-        studySessions: userStats.studySessions + 1,
-        totalPoints: userStats.totalPoints + xpEarned,
-      });
-    }
-    await this.updateStreak(session.userId);
-
-    return updated;
-  }
-
-  async getUserFriends(userId: string): Promise<any[]> {
-    const friendships = Array.from(this.friendships.values()).filter(
-      (f) => (f.userId === userId || f.friendId === userId) && f.status === "accepted"
-    );
-    return friendships.map(f => {
-      const friendId = f.userId === userId ? f.friendId : f.userId;
-      const friend = this.users.get(friendId);
-      if (!friend) return null;
-      return {
-        id: f.id,
-        userId: f.userId,
-        friendId: f.friendId,
-        status: f.status,
-        createdAt: f.createdAt,
-        friendName: friend.fullName,
-        friendEmail: friend.email,
-        friendPoints: friend.points,
-        friendAvatarUrl: friend.avatarUrl,
-      };
-    }).filter(f => f !== null);
-  }
-
-  async getFriendRequests(userId: string): Promise<any[]> {
-    const friendships = Array.from(this.friendships.values()).filter(
-      (f) => f.friendId === userId && f.status === "pending"
-    );
-    return friendships.map(f => {
-      const sender = this.users.get(f.userId);
-      if (!sender) return null;
-      return {
-        id: f.id,
-        userId: f.userId,
-        friendId: f.friendId,
-        status: f.status,
-        createdAt: f.createdAt,
-        senderName: sender.fullName,
-        senderEmail: sender.email,
-        senderAvatarUrl: sender.avatarUrl,
-      };
-    }).filter(f => f !== null);
-  }
-
-  async checkFriendship(userId: string, friendId: string): Promise<Friendship | null> {
-    const friendship = Array.from(this.friendships.values()).find(
-      (f) =>
-        (f.userId === userId && f.friendId === friendId) ||
-        (f.userId === friendId && f.friendId === userId)
-    );
-    return friendship || null;
-  }
-
-  async createFriendRequest(userId: string, friendId: string): Promise<Friendship> {
-    // Check if friendship already exists or if it's a request to self
-    const existingFriendship = await this.checkFriendship(userId, friendId);
-    if (existingFriendship) {
-      throw new Error("Friendship or request already exists.");
-    }
-    if (userId === friendId) {
-      throw new Error("Cannot send friend request to yourself.");
-    }
-
-    const id = randomUUID();
-    const friendship: Friendship = {
-      id,
-      userId,
-      friendId,
-      status: "pending",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.friendships.set(id, friendship);
-    return friendship;
-  }
-
-  async acceptFriendRequest(requestId: string): Promise<Friendship | null> {
-    const friendship = this.friendships.get(requestId);
-    if (!friendship || friendship.status !== "pending") return null;
-
-    const updated: Friendship = {
-      ...friendship,
-      status: "accepted",
-      updatedAt: new Date(),
-    };
-    this.friendships.set(requestId, updated);
-    return updated;
-  }
-
-  async rejectFriendRequest(requestId: string): Promise<Friendship | null> {
-    const friendship = this.friendships.get(requestId);
-    if (!friendship || friendship.status !== "pending") return null;
-
-    const updated: Friendship = {
-      ...friendship,
-      status: "rejected",
-      updatedAt: new Date(),
-    };
-    this.friendships.set(requestId, updated);
-    return updated;
-  }
-
-  async removeFriend(userId: string, friendId: string): Promise<void> {
-    const friendship = Array.from(this.friendships.values()).find(
-      (f) =>
-        (f.userId === userId && f.friendId === friendId && f.status === "accepted") ||
-        (f.userId === friendId && f.friendId === userId && f.status === "accepted")
-    );
-    if (friendship) {
-      this.friendships.delete(friendship.id);
-    }
-  }
-
-  // Create Task method
-  async createTask(data: InsertTask): Promise<Task> {
-    const id = randomUUID();
-    const task: Task = {
-      ...data,
-      id,
-      completed: false,
-      createdAt: new Date(),
-      completedAt: null,
-    };
-    this.tasks.set(id, task);
-    return task;
-  }
-
-  // Update Task method
-  async updateTask(taskId: string, data: Partial<InsertTask>): Promise<Task | null> {
-    const task = this.tasks.get(taskId);
-    if (!task) return null;
-    const updated: Task = {
-      ...task,
-      ...data,
-    };
-    this.tasks.set(taskId, updated);
-    return updated;
-  }
-
-  // Complete Task method
-  async completeTask(taskId: string): Promise<Task | null> {
-    const task = this.tasks.get(taskId);
-    if (!task) return null;
-    const updated: Task = {
-      ...task,
-      completed: true,
-      completedAt: new Date(),
-    };
-    this.tasks.set(taskId, updated);
-    return updated;
-  }
-
-  // Delete Task method
-  async deleteTask(taskId: string): Promise<void> {
-    this.tasks.delete(taskId);
   }
 
   // Method to update streak, called after study sessions or tasks are completed
