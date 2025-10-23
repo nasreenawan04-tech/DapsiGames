@@ -104,21 +104,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Initialize user stats and streak
       if (db) {
         try {
-          await db.insert(userStats).values({
-            userId: newUser.id,
-            totalPoints: 0,
-            currentRank: 0,
-            gamesPlayed: 0,
-            studySessions: 0,
-          });
+          // Check if stats already exist
+          const existingStats = await db
+            .select()
+            .from(userStats)
+            .where(eq(userStats.userId, newUser.id))
+            .limit(1);
 
-          await db.insert(streaks).values({
-            userId: newUser.id,
-            currentStreak: 0,
-            longestStreak: 0,
-          });
+          if (existingStats.length === 0) {
+            await db.insert(userStats).values({
+              userId: newUser.id,
+              totalPoints: 0,
+              currentRank: 0,
+              gamesPlayed: 0,
+              studySessions: 0,
+            });
+          }
+
+          // Check if streak already exists
+          const existingStreak = await db
+            .select()
+            .from(streaks)
+            .where(eq(streaks.userId, newUser.id))
+            .limit(1);
+
+          if (existingStreak.length === 0) {
+            await db.insert(streaks).values({
+              userId: newUser.id,
+              currentStreak: 0,
+              longestStreak: 0,
+            });
+          }
+
+          // Initialize user coins
+          const existingCoins = await db
+            .select()
+            .from(userCoins)
+            .where(eq(userCoins.userId, newUser.id))
+            .limit(1);
+
+          if (existingCoins.length === 0) {
+            await db.insert(userCoins).values({
+              userId: newUser.id,
+              balance: 0,
+              totalEarned: 0,
+              totalSpent: 0,
+            });
+          }
+
+          // Initialize user level
+          const existingLevel = await db
+            .select()
+            .from(userLevels)
+            .where(eq(userLevels.userId, newUser.id))
+            .limit(1);
+
+          if (existingLevel.length === 0) {
+            await db.insert(userLevels).values({
+              userId: newUser.id,
+              currentLevel: 1,
+              currentXp: 0,
+              totalXp: 0,
+            });
+          }
         } catch (error: any) {
-          console.log("Stats initialization skipped:", error.message);
+          console.error("Error initializing user data:", error.message);
         }
       }
 
@@ -369,6 +419,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (userId === friendId) {
         return res.status(400).json({ error: "Cannot send friend request to yourself" });
       }
+
+      // Verify both users exist
+      const user = await storage.getUser(userId);
+      const friend = await storage.getUser(friendId);
+
+      if (!user || !friend) {
+        return res.status(404).json({ error: "User not found" });
+      }
       
       // Check if friendship already exists
       const existingFriendships = await storage.getUserFriendships(userId);
@@ -386,7 +444,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(friendship);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      console.error("Error sending friend request:", error);
+      res.status(500).json({ error: error.message });
     }
   });
   
@@ -1660,6 +1719,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { taskId } = req.params;
       
+      if (!db) {
+        return res.status(503).json({ error: "Database not available" });
+      }
+
       const [task] = await db
         .select()
         .from(tasks)
@@ -1748,25 +1811,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ ...updatedTask, xpEarned: totalXp });
     } catch (error: any) {
       console.error("Error completing task:", error);
-      res.status(400).json({ error: error.message });
+      res.status(500).json({ error: error.message });
     }
   });
 
   // Delete a task
   app.delete("/api/tasks/:taskId", async (req, res) => {
     try {
-      const [deletedTask] = await db
+      if (!db) {
+        return res.status(503).json({ error: "Database not available" });
+      }
+
+      const deletedTasks = await db
         .delete(tasks)
         .where(eq(tasks.id, req.params.taskId))
         .returning();
 
-      if (!deletedTask) {
+      if (!deletedTasks || deletedTasks.length === 0) {
         return res.status(404).json({ error: "Task not found" });
       }
 
       res.json({ message: "Task deleted successfully" });
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      console.error("Error deleting task:", error);
+      res.status(500).json({ error: error.message });
     }
   });
 
@@ -1775,6 +1843,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get streak for a user
   app.get("/api/streaks/:userId", async (req, res) => {
     try {
+      if (!db) {
+        return res.status(503).json({ error: "Database not available" });
+      }
+
       const [userStreak] = await db
         .select()
         .from(streaks)
@@ -1783,17 +1855,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!userStreak) {
         // Create a new streak for the user
-        const [newStreak] = await db
-          .insert(streaks)
-          .values({ userId: req.params.userId })
-          .returning();
-        
-        return res.json(newStreak);
+        try {
+          const [newStreak] = await db
+            .insert(streaks)
+            .values({ 
+              userId: req.params.userId,
+              currentStreak: 0,
+              longestStreak: 0,
+            })
+            .returning();
+          
+          return res.json(newStreak);
+        } catch (insertError: any) {
+          // If insert fails, try to select again (race condition)
+          const [existingStreak] = await db
+            .select()
+            .from(streaks)
+            .where(eq(streaks.userId, req.params.userId))
+            .limit(1);
+          
+          if (existingStreak) {
+            return res.json(existingStreak);
+          }
+          
+          throw insertError;
+        }
       }
 
       res.json(userStreak);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      console.error("Error fetching streak:", error);
+      res.status(500).json({ error: error.message });
     }
   });
 
