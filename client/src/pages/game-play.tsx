@@ -254,63 +254,80 @@ export default function GamePlay() {
 
           {/* Only show intro/finished for math-quiz, regular gameplay for others */}
           {(gameId !== "math-quiz" || gameState !== "playing") && gameState === "intro" && (
-            <Card>
-              <CardHeader className="text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="h-16 w-16 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                    <Trophy className="h-8 w-8 text-white" />
+            <Card className="border-2 shadow-2xl overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none" />
+              <CardHeader className="text-center relative pb-8">
+                <div className="flex justify-center mb-6">
+                  <div className="h-20 w-20 rounded-full bg-gradient-to-br from-primary via-primary to-secondary flex items-center justify-center shadow-lg ring-4 ring-primary/20 animate-pulse">
+                    <Trophy className="h-10 w-10 text-white drop-shadow-lg" />
                   </div>
                 </div>
-                <CardTitle className="text-3xl mb-2" data-testid="text-game-title">
+                <CardTitle className="text-4xl mb-3 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent font-extrabold" data-testid="text-game-title">
                   {game.title}
                 </CardTitle>
-                <CardDescription className="text-base">
+                <CardDescription className="text-base max-w-md mx-auto">
                   Answer questions correctly and quickly to maximize your score
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-8 relative">
                 {/* Difficulty selection for Math Blitz */}
                 {gameId === "math-quiz" && (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     <div className="text-center">
-                      <h3 className="font-semibold text-lg mb-3">Choose Your Challenge</h3>
-                      <div className="grid grid-cols-3 gap-3">
+                      <h3 className="font-bold text-xl mb-6 flex items-center justify-center gap-2">
+                        <span className="h-1 w-12 bg-gradient-to-r from-transparent to-primary rounded-full" />
+                        Choose Your Challenge
+                        <span className="h-1 w-12 bg-gradient-to-l from-transparent to-primary rounded-full" />
+                      </h3>
+                      <div className="grid grid-cols-3 gap-4">
                         <Button
                           variant={selectedDifficulty === "easy" ? "default" : "outline"}
                           onClick={() => setSelectedDifficulty("easy")}
-                          className="h-auto py-4 flex flex-col items-center gap-2"
+                          className={`h-auto py-6 px-4 flex flex-col items-center gap-3 transition-all duration-300 ${
+                            selectedDifficulty === "easy" 
+                              ? "shadow-xl scale-105 border-2 border-primary" 
+                              : "hover:scale-105 hover:shadow-lg"
+                          }`}
                           data-testid="button-difficulty-easy"
                         >
-                          <span className="text-2xl">🌱</span>
+                          <span className="text-3xl drop-shadow-md">🌱</span>
                           <div>
-                            <div className="font-bold">Easy</div>
-                            <div className="text-xs opacity-75">10 problems</div>
+                            <div className="font-bold text-lg">Easy</div>
+                            <div className="text-xs opacity-75 mt-1">10 problems</div>
                             <div className="text-xs opacity-75">90 seconds</div>
                           </div>
                         </Button>
                         <Button
                           variant={selectedDifficulty === "medium" ? "default" : "outline"}
                           onClick={() => setSelectedDifficulty("medium")}
-                          className="h-auto py-4 flex flex-col items-center gap-2"
+                          className={`h-auto py-6 px-4 flex flex-col items-center gap-3 transition-all duration-300 ${
+                            selectedDifficulty === "medium" 
+                              ? "shadow-xl scale-105 border-2 border-primary" 
+                              : "hover:scale-105 hover:shadow-lg"
+                          }`}
                           data-testid="button-difficulty-medium"
                         >
-                          <span className="text-2xl">🔥</span>
+                          <span className="text-3xl drop-shadow-md">🔥</span>
                           <div>
-                            <div className="font-bold">Medium</div>
-                            <div className="text-xs opacity-75">15 problems</div>
+                            <div className="font-bold text-lg">Medium</div>
+                            <div className="text-xs opacity-75 mt-1">15 problems</div>
                             <div className="text-xs opacity-75">120 seconds</div>
                           </div>
                         </Button>
                         <Button
                           variant={selectedDifficulty === "hard" ? "default" : "outline"}
                           onClick={() => setSelectedDifficulty("hard")}
-                          className="h-auto py-4 flex flex-col items-center gap-2"
+                          className={`h-auto py-6 px-4 flex flex-col items-center gap-3 transition-all duration-300 ${
+                            selectedDifficulty === "hard" 
+                              ? "shadow-xl scale-105 border-2 border-primary" 
+                              : "hover:scale-105 hover:shadow-lg"
+                          }`}
                           data-testid="button-difficulty-hard"
                         >
-                          <span className="text-2xl">⚡</span>
+                          <span className="text-3xl drop-shadow-md">⚡</span>
                           <div>
-                            <div className="font-bold">Hard</div>
-                            <div className="text-xs opacity-75">20 problems</div>
+                            <div className="font-bold text-lg">Hard</div>
+                            <div className="text-xs opacity-75 mt-1">20 problems</div>
                             <div className="text-xs opacity-75">150 seconds</div>
                           </div>
                         </Button>
@@ -322,53 +339,84 @@ export default function GamePlay() {
                 {/* Standard game stats for non-math games */}
                 {gameId !== "math-quiz" && (
                   <div className="grid grid-cols-3 gap-4 text-center">
-                    <div className="p-4 rounded-lg bg-muted/30">
-                      <p className="text-2xl font-bold text-primary">{game.questions.length}</p>
+                    <div className="p-5 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 hover-elevate transition-all">
+                      <p className="text-3xl font-bold text-primary mb-1">{game.questions.length}</p>
                       <p className="text-sm text-muted-foreground">Questions</p>
                     </div>
-                    <div className="p-4 rounded-lg bg-muted/30">
-                      <p className="text-2xl font-bold text-secondary">30s</p>
+                    <div className="p-5 rounded-xl bg-gradient-to-br from-secondary/10 to-secondary/5 border border-secondary/20 hover-elevate transition-all">
+                      <p className="text-3xl font-bold text-secondary mb-1">30s</p>
                       <p className="text-sm text-muted-foreground">Per Question</p>
                     </div>
-                    <div className="p-4 rounded-lg bg-muted/30">
-                      <p className="text-2xl font-bold text-accent">+{game.pointsReward}</p>
+                    <div className="p-5 rounded-xl bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/20 hover-elevate transition-all">
+                      <p className="text-3xl font-bold text-accent mb-1">+{game.pointsReward}</p>
                       <p className="text-sm text-muted-foreground">Max Points</p>
                     </div>
                   </div>
                 )}
 
-                <div className="space-y-3 p-4 rounded-lg bg-muted/30">
-                  <h3 className="font-semibold">How to Play:</h3>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
+                <div className="space-y-4 p-6 rounded-xl bg-gradient-to-br from-muted/50 to-muted/30 border border-muted">
+                  <h3 className="font-bold text-lg flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                    How to Play
+                  </h3>
+                  <ul className="space-y-3 text-sm">
                     {gameId === "math-quiz" ? (
                       <>
-                        <li>• Solve arithmetic problems as fast as you can</li>
-                        <li>• Build streaks for bonus points</li>
-                        <li>• Speed matters - quick answers earn more</li>
-                        <li>• Watch out for the timer!</li>
+                        <li className="flex items-start gap-3 hover-elevate p-2 rounded-lg transition-all">
+                          <span className="text-primary font-bold">⚡</span>
+                          <span>Solve arithmetic problems as fast as you can</span>
+                        </li>
+                        <li className="flex items-start gap-3 hover-elevate p-2 rounded-lg transition-all">
+                          <span className="text-orange-500 font-bold">🔥</span>
+                          <span>Build streaks for bonus points and multipliers</span>
+                        </li>
+                        <li className="flex items-start gap-3 hover-elevate p-2 rounded-lg transition-all">
+                          <span className="text-yellow-500 font-bold">⭐</span>
+                          <span>Speed matters - quick answers earn more points</span>
+                        </li>
+                        <li className="flex items-start gap-3 hover-elevate p-2 rounded-lg transition-all">
+                          <span className="text-red-500 font-bold">⏱️</span>
+                          <span>Watch out for the timer - beat the clock!</span>
+                        </li>
                       </>
                     ) : (
                       <>
-                        <li>• Answer each question within the time limit</li>
-                        <li>• Faster answers earn more points</li>
-                        <li>• Wrong answers don't deduct points</li>
-                        <li>• Complete all questions to finish the game</li>
+                        <li className="flex items-start gap-3">
+                          <span className="text-primary">•</span>
+                          <span>Answer each question within the time limit</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <span className="text-primary">•</span>
+                          <span>Faster answers earn more points</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <span className="text-primary">•</span>
+                          <span>Wrong answers don't deduct points</span>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <span className="text-primary">•</span>
+                          <span>Complete all questions to finish the game</span>
+                        </li>
                       </>
                     )}
                   </ul>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-4 pt-4">
                   <Link href="/games">
                     <a className="flex-1">
-                      <Button variant="outline" className="w-full" data-testid="button-back">
-                        <ArrowLeft className="h-4 w-4 mr-2" />
+                      <Button variant="outline" className="w-full h-14 text-base shadow-md hover:shadow-lg transition-all" data-testid="button-back">
+                        <ArrowLeft className="h-5 w-5 mr-2" />
                         Back to Games
                       </Button>
                     </a>
                   </Link>
-                  <Button className="flex-1" onClick={startGame} data-testid="button-start">
-                    <Play className="h-4 w-4 mr-2" />
+                  <Button 
+                    className="flex-1 h-14 text-base shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-primary to-secondary hover:scale-105" 
+                    onClick={startGame} 
+                    data-testid="button-start"
+                  >
+                    <Play className="h-5 w-5 mr-2" />
                     Start Game
                   </Button>
                 </div>
