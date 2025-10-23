@@ -106,87 +106,7 @@ export function MathChallengeGame({
     });
   }, [onComplete]);
 
-  const handleNext = useCallback(() => {
-    if (currentProblem < problems.length - 1) {
-      setCurrentProblem(prev => prev + 1);
-      setUserAnswer("");
-      setShowResult(false);
-      setIsCorrect(false);
-      setProblemStartTime(Date.now());
-      
-      // Focus input for next question
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-    } else {
-      handleFinishGame();
-    }
-  }, [currentProblem, problems.length, handleFinishGame]);
-
-  useEffect(() => {
-    generateProblems();
-  }, [difficulty, numberOfQuestions]);
-
-  useEffect(() => {
-    if (isFinished || problems.length === 0) return;
-
-    const timer = setInterval(() => {
-      setTimeElapsed(prev => {
-        const newTime = prev + 1;
-        if (timeLimit && newTime >= timeLimit) {
-          handleFinishGame();
-        }
-        return newTime;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isFinished, timeLimit, problems.length]);
-
-  // Auto-advance to next question after showing result
-  useEffect(() => {
-    if (!showResult) return;
-    
-    // Clear any existing timeout
-    if (autoAdvanceTimeoutRef.current) {
-      clearTimeout(autoAdvanceTimeoutRef.current);
-    }
-    
-    // Auto-advance after 1.2 seconds for correct, 2 seconds for incorrect
-    const delay = isCorrect ? 1200 : 2000;
-    autoAdvanceTimeoutRef.current = setTimeout(() => {
-      handleNext();
-    }, delay);
-
-    return () => {
-      if (autoAdvanceTimeoutRef.current) {
-        clearTimeout(autoAdvanceTimeoutRef.current);
-      }
-    };
-  }, [showResult, isCorrect, handleNext]);
-
-  // Particle animation
-  useEffect(() => {
-    if (particles.length === 0) return;
-
-    const animationFrame = requestAnimationFrame(() => {
-      setParticles(prev => 
-        prev
-          .map(p => ({
-            ...p,
-            x: p.x + p.velocityX,
-            y: p.y + p.velocityY,
-            velocityY: p.velocityY + 0.5, // gravity
-            life: p.life - 1,
-          }))
-          .filter(p => p.life > 0)
-      );
-    });
-
-    return () => cancelAnimationFrame(animationFrame);
-  }, [particles]);
-
-  const generateProblems = () => {
+  const generateProblems = useCallback(() => {
     const newProblems: MathProblem[] = [];
     const operators: Array<"+" | "-" | "*" | "/"> = 
       difficulty === "easy" ? ["+", "-"] : 
@@ -240,7 +160,87 @@ export function MathChallengeGame({
 
     setProblems(newProblems);
     setProblemStartTime(Date.now());
-  };
+  }, [difficulty, numberOfQuestions]);
+
+  const handleNext = useCallback(() => {
+    if (currentProblem < problems.length - 1) {
+      setCurrentProblem(prev => prev + 1);
+      setUserAnswer("");
+      setShowResult(false);
+      setIsCorrect(false);
+      setProblemStartTime(Date.now());
+      
+      // Focus input for next question
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+    } else {
+      handleFinishGame();
+    }
+  }, [currentProblem, problems.length, handleFinishGame]);
+
+  useEffect(() => {
+    generateProblems();
+  }, [generateProblems]);
+
+  useEffect(() => {
+    if (isFinished || problems.length === 0) return;
+
+    const timer = setInterval(() => {
+      setTimeElapsed(prev => {
+        const newTime = prev + 1;
+        if (timeLimit && newTime >= timeLimit) {
+          handleFinishGame();
+        }
+        return newTime;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isFinished, timeLimit, problems.length, handleFinishGame]);
+
+  // Auto-advance to next question after showing result
+  useEffect(() => {
+    if (!showResult) return;
+    
+    // Clear any existing timeout
+    if (autoAdvanceTimeoutRef.current) {
+      clearTimeout(autoAdvanceTimeoutRef.current);
+    }
+    
+    // Auto-advance after 1.2 seconds for correct, 2 seconds for incorrect
+    const delay = isCorrect ? 1200 : 2000;
+    autoAdvanceTimeoutRef.current = setTimeout(() => {
+      handleNext();
+    }, delay);
+
+    return () => {
+      if (autoAdvanceTimeoutRef.current) {
+        clearTimeout(autoAdvanceTimeoutRef.current);
+      }
+    };
+  }, [showResult, isCorrect, handleNext]);
+
+  // Particle animation
+  useEffect(() => {
+    if (particles.length === 0) return;
+
+    const animationFrame = requestAnimationFrame(() => {
+      setParticles(prev => 
+        prev
+          .map(p => ({
+            ...p,
+            x: p.x + p.velocityX,
+            y: p.y + p.velocityY,
+            velocityY: p.velocityY + 0.5, // gravity
+            life: p.life - 1,
+          }))
+          .filter(p => p.life > 0)
+      );
+    });
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, [particles]);
 
   const createParticles = (isCorrectAnswer: boolean) => {
     const colors = isCorrectAnswer 

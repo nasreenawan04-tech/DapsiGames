@@ -194,13 +194,11 @@ export default function Games() {
                 </CardContent>
 
                 <CardFooter>
-                  <Link href={`/games/${game.id}`}>
-                    <a className="w-full">
-                      <Button className="w-full" data-testid={`button-play-${game.id}`}>
-                        <Zap className="h-4 w-4 mr-2" />
-                        Play Now
-                      </Button>
-                    </a>
+                  <Link href={`/games/${game.id}`} className="w-full">
+                    <Button className="w-full" data-testid={`button-play-${game.id}`}>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Play Now
+                    </Button>
                   </Link>
                 </CardFooter>
               </Card>
@@ -219,12 +217,10 @@ export default function Games() {
                 Complete games to earn points and climb the leaderboard. Each game rewards you based on your performance!
               </p>
               <Link href="/leaderboard">
-                <a>
-                  <Button size="lg" data-testid="button-view-leaderboard">
-                    <Trophy className="h-4 w-4 mr-2" />
-                    View Leaderboard
-                  </Button>
-                </a>
+                <Button size="lg" data-testid="button-view-leaderboard">
+                  <Trophy className="h-4 w-4 mr-2" />
+                  View Leaderboard
+                </Button>
               </Link>
             </div>
           </CardContent>

@@ -5,6 +5,8 @@ import { setupSecurityMiddleware } from "./middleware/security";
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 setupSecurityMiddleware(app);
 
 declare module 'http' {
