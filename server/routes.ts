@@ -370,11 +370,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { friendshipId } = req.params;
       
-      const [updated] = await db
-        .update(friendships)
-        .set({ status: 'accepted', updatedAt: new Date() })
-        .where(eq(friendships.id, friendshipId))
-        .returning();
+      const updated = await storage.updateFriendship(friendshipId, { 
+        status: 'accepted', 
+        updatedAt: new Date() 
+      });
       
       if (!updated) {
         return res.status(404).json({ error: "Friend request not found" });
@@ -391,11 +390,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { friendshipId } = req.params;
       
-      const [updated] = await db
-        .update(friendships)
-        .set({ status: 'rejected', updatedAt: new Date() })
-        .where(eq(friendships.id, friendshipId))
-        .returning();
+      const updated = await storage.updateFriendship(friendshipId, { 
+        status: 'rejected', 
+        updatedAt: new Date() 
+      });
       
       if (!updated) {
         return res.status(404).json({ error: "Friend request not found" });
@@ -412,9 +410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { friendshipId } = req.params;
       
-      await db
-        .delete(friendships)
-        .where(eq(friendships.id, friendshipId));
+      await storage.deleteFriendship(friendshipId);
       
       res.json({ success: true });
     } catch (error: any) {
@@ -427,26 +423,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId } = req.params;
       
-      const userFriends = await db
-        .select({
-          friendshipId: friendships.id,
-          userId: users.id,
-          fullName: users.fullName,
-          email: users.email,
-          points: users.points,
-          rank: users.rank,
-          avatarUrl: users.avatarUrl,
-          status: friendships.status,
-          createdAt: friendships.createdAt,
-        })
-        .from(friendships)
-        .innerJoin(users, sql`(
-          (${friendships.userId} = ${userId} AND ${friendships.friendId} = ${users.id}) OR
-          (${friendships.friendId} = ${userId} AND ${friendships.userId} = ${users.id})
-        )`)
-        .where(eq(friendships.status, 'accepted'));
+      const friendships = await storage.getUserFriendships(userId);
+      const acceptedFriendships = friendships.filter(f => f.status === 'accepted');
       
-      res.json(userFriends);
+      const userFriends = await Promise.all(acceptedFriendships.map(async (friendship) => {
+        const friendId = friendship.userId === userId ? friendship.friendId : friendship.userId;
+        const friendUser = await storage.getUser(friendId);
+        
+        if (!friendUser) return null;
+        
+        return {
+          friendshipId: friendship.id,
+          userId: friendUser.id,
+          fullName: friendUser.fullName,
+          email: friendUser.email,
+          points: friendUser.points,
+          rank: friendUser.rank,
+          avatarUrl: friendUser.avatarUrl,
+          status: friendship.status,
+          createdAt: friendship.createdAt,
+        };
+      }));
+      
+      res.json(userFriends.filter(f => f !== null));
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -457,20 +456,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId } = req.params;
       
-      const requests = await db
-        .select({
-          friendshipId: friendships.id,
-          userId: users.id,
-          fullName: users.fullName,
-          email: users.email,
-          avatarUrl: users.avatarUrl,
-          createdAt: friendships.createdAt,
-        })
-        .from(friendships)
-        .innerJoin(users, eq(friendships.userId, users.id))
-        .where(sql`${friendships.friendId} = ${userId} AND ${friendships.status} = 'pending'`);
+      const friendships = await storage.getUserFriendships(userId);
+      const pendingRequests = friendships.filter(f => f.friendId === userId && f.status === 'pending');
       
-      res.json(requests);
+      const requests = await Promise.all(pendingRequests.map(async (friendship) => {
+        const requesterUser = await storage.getUser(friendship.userId);
+        
+        if (!requesterUser) return null;
+        
+        return {
+          friendshipId: friendship.id,
+          userId: requesterUser.id,
+          fullName: requesterUser.fullName,
+          email: requesterUser.email,
+          avatarUrl: requesterUser.avatarUrl,
+          createdAt: friendship.createdAt,
+        };
+      }));
+      
+      res.json(requests.filter(r => r !== null));
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -485,18 +489,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Search query required" });
       }
       
-      const searchResults = await db
-        .select({
-          id: users.id,
-          fullName: users.fullName,
-          email: users.email,
-          points: users.points,
-          rank: users.rank,
-          avatarUrl: users.avatarUrl,
-        })
-        .from(users)
-        .where(sql`LOWER(${users.fullName}) LIKE LOWER(${'%' + query + '%'}) OR LOWER(${users.email}) LIKE LOWER(${'%' + query + '%'})`)
-        .limit(10);
+      const allUsers = await storage.getAllUsers();
+      const lowerQuery = query.toLowerCase();
+      
+      const searchResults = allUsers
+        .filter(user => 
+          user.fullName.toLowerCase().includes(lowerQuery) || 
+          user.email.toLowerCase().includes(lowerQuery)
+        )
+        .slice(0, 10)
+        .map(user => ({
+          id: user.id,
+          fullName: user.fullName,
+          email: user.email,
+          points: user.points,
+          rank: user.rank,
+          avatarUrl: user.avatarUrl,
+        }));
       
       res.json(searchResults);
     } catch (error: any) {
@@ -529,25 +538,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all public groups
   app.get("/api/groups", async (req, res) => {
     try {
-      const publicGroups = await db
-        .select({
-          id: groups.id,
-          name: groups.name,
-          description: groups.description,
-          avatarUrl: groups.avatarUrl,
-          isPublic: groups.isPublic,
-          ownerId: groups.ownerId,
-          ownerName: users.fullName,
-          createdAt: groups.createdAt,
-          memberCount: sql<number>`COUNT(DISTINCT ${groupMembers.id})`,
-        })
-        .from(groups)
-        .leftJoin(groupMembers, eq(groups.id, groupMembers.groupId))
-        .leftJoin(users, eq(groups.ownerId, users.id))
-        .where(eq(groups.isPublic, true))
-        .groupBy(groups.id, users.fullName);
+      const allGroups = await storage.getAllGroups();
+      const publicGroups = allGroups.filter(g => g.isPublic);
       
-      res.json(publicGroups);
+      const enrichedGroups = await Promise.all(publicGroups.map(async (group) => {
+        const owner = await storage.getUser(group.ownerId);
+        const members = await storage.getGroupMembers(group.id);
+        
+        return {
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          avatarUrl: group.avatarUrl,
+          isPublic: group.isPublic,
+          ownerId: group.ownerId,
+          ownerName: owner?.fullName || 'Unknown',
+          createdAt: group.createdAt,
+          memberCount: members.length,
+        };
+      }));
+      
+      res.json(enrichedGroups);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -558,46 +569,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId } = req.params;
       
-      // First get the user's group memberships
-      const memberships = await db
-        .select({
-          groupId: groupMembers.groupId,
-          role: groupMembers.role,
-          joinedAt: groupMembers.joinedAt,
-        })
-        .from(groupMembers)
-        .where(eq(groupMembers.userId, userId));
+      const userGroups = await storage.getUserGroups(userId);
       
-      if (memberships.length === 0) {
+      if (userGroups.length === 0) {
         return res.json([]);
       }
       
-      // Then get the group details with member counts
-      const groupIds = memberships.map((m: any) => m.groupId);
-      const userGroups = await db
-        .select({
-          id: groups.id,
-          name: groups.name,
-          description: groups.description,
-          avatarUrl: groups.avatarUrl,
-          isPublic: groups.isPublic,
-          ownerId: groups.ownerId,
-          memberCount: sql<number>`COUNT(DISTINCT ${groupMembers.id})`,
-        })
-        .from(groups)
-        .leftJoin(groupMembers, eq(groups.id, groupMembers.groupId))
-        .where(inArray(groups.id, groupIds))
-        .groupBy(groups.id);
-      
-      // Combine the results
-      const result = userGroups.map((group: any) => {
-        const membership = memberships.find((m: any) => m.groupId === group.id);
+      const result = await Promise.all(userGroups.map(async (group) => {
+        const members = await storage.getGroupMembers(group.id);
+        const allMembers = await storage.getGroupMembers(group.id);
+        const userMembership = allMembers.find(m => m.userId === userId);
+        
         return {
-          ...group,
-          role: membership?.role,
-          joinedAt: membership?.joinedAt,
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          avatarUrl: group.avatarUrl,
+          isPublic: group.isPublic,
+          ownerId: group.ownerId,
+          memberCount: members.length,
+          role: userMembership?.role,
+          joinedAt: userMembership?.joinedAt,
         };
-      });
+      }));
       
       res.json(result);
     } catch (error: any) {
@@ -610,11 +604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { groupId } = req.params;
       
-      const [group] = await db
-        .select()
-        .from(groups)
-        .where(eq(groups.id, groupId))
-        .limit(1);
+      const group = await storage.getGroup(groupId);
       
       if (!group) {
         return res.status(404).json({ error: "Group not found" });
@@ -637,24 +627,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if user is already a member
-      const existing = await db
-        .select()
-        .from(groupMembers)
-        .where(sql`${groupMembers.groupId} = ${groupId} AND ${groupMembers.userId} = ${userId}`)
-        .limit(1);
+      const existing = await storage.getGroupMembers(groupId);
+      const alreadyMember = existing.some(m => m.userId === userId);
       
-      if (existing.length > 0) {
+      if (alreadyMember) {
         return res.status(400).json({ error: "Already a member of this group" });
       }
       
-      const [membership] = await db
-        .insert(groupMembers)
-        .values({
-          groupId,
-          userId,
-          role: 'member',
-        })
-        .returning();
+      const membership = await storage.createGroupMember({
+        groupId,
+        userId,
+        role: 'member',
+      });
       
       res.json(membership);
     } catch (error: any) {
@@ -672,9 +656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "User ID required" });
       }
       
-      await db
-        .delete(groupMembers)
-        .where(sql`${groupMembers.groupId} = ${groupId} AND ${groupMembers.userId} = ${userId}`);
+      await storage.deleteGroupMember(groupId, userId);
       
       res.json({ success: true });
     } catch (error: any) {
@@ -687,24 +669,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { groupId } = req.params;
       
-      const members = await db
-        .select({
-          membershipId: groupMembers.id,
-          userId: users.id,
-          fullName: users.fullName,
-          email: users.email,
-          avatarUrl: users.avatarUrl,
-          points: users.points,
-          rank: users.rank,
-          role: groupMembers.role,
-          joinedAt: groupMembers.joinedAt,
-        })
-        .from(groupMembers)
-        .innerJoin(users, eq(groupMembers.userId, users.id))
-        .where(eq(groupMembers.groupId, groupId))
-        .orderBy(desc(users.points));
+      const groupMembers = await storage.getGroupMembers(groupId);
       
-      res.json(members);
+      const members = await Promise.all(groupMembers.map(async (member) => {
+        const user = await storage.getUser(member.userId);
+        
+        if (!user) return null;
+        
+        return {
+          membershipId: member.id,
+          userId: user.id,
+          fullName: user.fullName,
+          email: user.email,
+          avatarUrl: user.avatarUrl,
+          points: user.points,
+          rank: user.rank,
+          role: member.role,
+          joinedAt: member.joinedAt,
+        };
+      }));
+      
+      const enrichedMembers = members.filter(m => m !== null);
+      enrichedMembers.sort((a, b) => (b?.points || 0) - (a?.points || 0));
+      
+      res.json(enrichedMembers);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
