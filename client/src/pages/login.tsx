@@ -1,14 +1,17 @@
 import { Link } from "wouter";
 import { Trophy, Mail, Lock } from "lucide-react";
+import { SiGoogle } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { signInWithGoogle } from "@/services/authService";
 import {
   Form,
   FormControl,
@@ -50,6 +53,18 @@ export default function Login() {
       toast({
         title: "Login failed",
         description: error.message || "Invalid email or password",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithGoogle();
+    } catch (error: any) {
+      toast({
+        title: "Google login failed",
+        description: error.message || "Please try again",
         variant: "destructive",
       });
     }
@@ -140,10 +155,8 @@ export default function Login() {
                   )}
                 />
 
-                <Link href="/forgot-password">
-                  <a className="text-sm text-primary hover:underline" data-testid="link-forgot-password">
-                    Forgot password?
-                  </a>
+                <Link href="/forgot-password" className="text-sm text-primary hover:underline" data-testid="link-forgot-password">
+                  Forgot password?
                 </Link>
               </div>
 
@@ -158,20 +171,39 @@ export default function Login() {
             </form>
           </Form>
 
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <Separator />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              className="w-full mt-4"
+              onClick={handleGoogleLogin}
+              data-testid="button-google-login"
+            >
+              <SiGoogle className="mr-2 h-4 w-4" />
+              Continue with Google
+            </Button>
+          </div>
+
           <div className="mt-6 text-center text-sm">
             <span className="text-muted-foreground">Don't have an account? </span>
-            <Link href="/signup">
-              <a className="text-primary hover:underline font-medium" data-testid="link-signup">
-                Sign up
-              </a>
+            <Link href="/signup" className="text-primary hover:underline font-medium" data-testid="link-signup">
+              Sign up
             </Link>
           </div>
 
           <div className="mt-6 text-center">
-            <Link href="/guest">
-              <a className="text-sm text-muted-foreground hover:text-foreground" data-testid="link-guest-mode">
-                Continue as guest
-              </a>
+            <Link href="/guest" className="text-sm text-muted-foreground hover:text-foreground" data-testid="link-guest-mode">
+              Continue as guest
             </Link>
           </div>
         </CardContent>

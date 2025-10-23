@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Trophy, Mail, Lock, User } from "lucide-react";
+import { SiGoogle } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { signInWithGoogle } from "@/services/authService";
 import {
   Form,
   FormControl,
@@ -96,6 +99,18 @@ export default function Signup() {
     } catch (error: any) {
       toast({
         title: "Registration failed",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleGoogleSignup = async () => {
+    try {
+      await signInWithGoogle();
+    } catch (error: any) {
+      toast({
+        title: "Google signup failed",
         description: error.message || "Please try again",
         variant: "destructive",
       });
@@ -274,12 +289,33 @@ export default function Signup() {
             </form>
           </Form>
 
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <Separator />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              className="w-full mt-4"
+              onClick={handleGoogleSignup}
+              data-testid="button-google-signup"
+            >
+              <SiGoogle className="mr-2 h-4 w-4" />
+              Continue with Google
+            </Button>
+          </div>
+
           <div className="mt-6 text-center text-sm">
             <span className="text-muted-foreground">Already have an account? </span>
-            <Link href="/login">
-              <a className="text-primary hover:underline font-medium" data-testid="link-login">
-                Login
-              </a>
+            <Link href="/login" className="text-primary hover:underline font-medium" data-testid="link-login">
+              Login
             </Link>
           </div>
         </CardContent>

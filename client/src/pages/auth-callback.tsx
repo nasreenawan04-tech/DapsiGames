@@ -4,6 +4,7 @@ import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
+import { getRedirectPath } from "@/lib/redirectAfterAuth";
 
 export default function AuthCallback() {
   const [, setLocation] = useLocation();
@@ -34,7 +35,8 @@ export default function AuthCallback() {
             if (type === 'recovery') {
               setLocation('/auth/reset-password');
             } else {
-              setLocation('/dashboard');
+              // Redirect using centralized utility
+              setLocation(getRedirectPath());
             }
           }, 2000);
         } else {
@@ -47,7 +49,8 @@ export default function AuthCallback() {
           if (session) {
             setStatus('success');
             setTimeout(() => {
-              setLocation('/dashboard');
+              // Redirect using centralized utility
+              setLocation(getRedirectPath());
             }, 2000);
           } else {
             throw new Error('No session found');

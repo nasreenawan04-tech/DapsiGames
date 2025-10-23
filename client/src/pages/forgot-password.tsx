@@ -79,10 +79,8 @@ export default function ForgotPassword() {
             </Alert>
 
             <div className="pt-4 border-t text-center">
-              <Link href="/login">
-                <a className="text-sm text-primary hover:underline" data-testid="link-back-to-login">
-                  Back to Login
-                </a>
+              <Link href="/login" className="text-sm text-primary hover:underline" data-testid="link-back-to-login">
+                Back to Login
               </Link>
             </div>
           </CardContent>
@@ -145,11 +143,9 @@ export default function ForgotPassword() {
           </Form>
 
           <div className="mt-6 text-center">
-            <Link href="/login">
-              <a className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground" data-testid="link-back-to-login">
-                <ArrowLeft className="h-4 w-4" />
-                Back to login
-              </a>
+            <Link href="/login" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground" data-testid="link-back-to-login">
+              <ArrowLeft className="h-4 w-4" />
+              Back to login
             </Link>
           </div>
         </CardContent>

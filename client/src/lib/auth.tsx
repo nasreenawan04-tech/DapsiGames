@@ -8,6 +8,7 @@ import {
   getCurrentUser,
   onAuthStateChange,
 } from "@/services/authService";
+import { getRedirectPath } from "./redirectAfterAuth";
 
 interface AuthUser {
   id: string;
@@ -94,7 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       avatarUrl: supabaseUser.user_metadata?.avatar_url,
     });
     
-    setLocation("/dashboard");
+    // Redirect using centralized utility
+    setLocation(getRedirectPath());
   };
 
   const register = async (fullName: string, email: string, password: string) => {
@@ -112,7 +114,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fullName: result.user.user_metadata?.full_name || '',
         avatarUrl: result.user.user_metadata?.avatar_url,
       });
-      setLocation("/dashboard");
+      
+      // Redirect using centralized utility
+      setLocation(getRedirectPath());
     }
 
     return { needsEmailVerification: false };

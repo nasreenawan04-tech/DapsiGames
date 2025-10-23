@@ -158,6 +158,78 @@ export async function getCurrentUser() {
 }
 
 /**
+ * Sign in with Google OAuth
+ */
+export async function signInWithGoogle() {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    },
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
+/**
+ * Upload profile picture to Supabase Storage
+ */
+export async function uploadProfilePicture(file: File, userId: string) {
+  // Validate file type and size
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const maxSize = 5 * 1024 * 1024; // 5MB
+
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error('Invalid file type. Please upload an image (JPEG, PNG, GIF, or WebP).');
+  }
+
+  if (file.size > maxSize) {
+    throw new Error('File size too large. Please upload an image smaller than 5MB.');
+  }
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}/avatar.${fileExt}`;
+  const filePath = `avatars/${fileName}`;
+
+  const { data, error } = await supabase.storage
+    .from('avatars')
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: true,
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('avatars')
+    .getPublicUrl(filePath);
+
+  if (!publicUrl) {
+    throw new Error('Failed to get public URL for uploaded avatar');
+  }
+
+  // Update user metadata with avatar URL
+  const { error: updateError } = await supabase.auth.updateUser({
+    data: {
+      avatar_url: publicUrl,
+    },
+  });
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  return publicUrl;
+}
+
+/**
  * Listen to auth state changes
  */
 export function onAuthStateChange(callback: (user: User | null) => void) {
