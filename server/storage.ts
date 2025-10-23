@@ -19,6 +19,18 @@ import {
   type InsertBookmark,
   type UserProgress,
   type InsertUserProgress,
+  type Task,
+  type InsertTask,
+  type StudySession,
+  type InsertStudySession,
+  type Friendship,
+  type InsertFriendship,
+  type Group,
+  type InsertGroup,
+  type GroupMember,
+  type InsertGroupMember,
+  type Streak,
+  type InsertStreak,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -73,6 +85,43 @@ export interface IStorage {
   getProgressForItem(userId: string, itemId: string, itemType: string): Promise<UserProgress | undefined>;
   createUserProgress(progress: InsertUserProgress): Promise<UserProgress>;
   updateUserProgress(userId: string, itemId: string, itemType: string, updates: Partial<UserProgress>): Promise<UserProgress>;
+  
+  // Task methods
+  getUserTasks(userId: string): Promise<Task[]>;
+  getTask(id: string): Promise<Task | undefined>;
+  createTask(task: InsertTask): Promise<Task>;
+  updateTask(taskId: string, updates: Partial<Task>): Promise<Task>;
+  deleteTask(taskId: string): Promise<void>;
+  
+  // StudySession methods
+  getUserStudySessions(userId: string): Promise<StudySession[]>;
+  getStudySession(id: string): Promise<StudySession | undefined>;
+  createStudySession(session: InsertStudySession): Promise<StudySession>;
+  updateStudySession(sessionId: string, updates: Partial<StudySession>): Promise<StudySession>;
+  
+  // Friendship methods
+  getUserFriendships(userId: string): Promise<Friendship[]>;
+  getFriendship(id: string): Promise<Friendship | undefined>;
+  createFriendship(friendship: InsertFriendship): Promise<Friendship>;
+  updateFriendship(friendshipId: string, updates: Partial<Friendship>): Promise<Friendship>;
+  deleteFriendship(friendshipId: string): Promise<void>;
+  
+  // Group methods
+  getGroup(id: string): Promise<Group | undefined>;
+  getAllGroups(): Promise<Group[]>;
+  getUserGroups(userId: string): Promise<Group[]>;
+  createGroup(group: InsertGroup): Promise<Group>;
+  updateGroup(groupId: string, updates: Partial<Group>): Promise<Group>;
+  
+  // GroupMember methods
+  getGroupMembers(groupId: string): Promise<GroupMember[]>;
+  createGroupMember(member: InsertGroupMember): Promise<GroupMember>;
+  deleteGroupMember(groupId: string, userId: string): Promise<void>;
+  
+  // Streak methods
+  getUserStreak(userId: string): Promise<Streak | undefined>;
+  createStreak(streak: InsertStreak): Promise<Streak>;
+  updateStreak(userId: string, updates: Partial<Streak>): Promise<Streak>;
 }
 
 export class MemStorage implements IStorage {
@@ -86,6 +135,12 @@ export class MemStorage implements IStorage {
   private gameScores: Map<string, GameScore>;
   private bookmarks: Map<string, Bookmark>;
   private userProgress: Map<string, UserProgress>;
+  private tasks: Map<string, Task>;
+  private studySessions: Map<string, StudySession>;
+  private friendships: Map<string, Friendship>;
+  private groups: Map<string, Group>;
+  private groupMembers: Map<string, GroupMember>;
+  private streaks: Map<string, Streak>;
 
   constructor() {
     this.users = new Map();
@@ -98,6 +153,12 @@ export class MemStorage implements IStorage {
     this.gameScores = new Map();
     this.bookmarks = new Map();
     this.userProgress = new Map();
+    this.tasks = new Map();
+    this.studySessions = new Map();
+    this.friendships = new Map();
+    this.groups = new Map();
+    this.groupMembers = new Map();
+    this.streaks = new Map();
     
     this.seedInitialData();
   }
@@ -444,6 +505,233 @@ export class MemStorage implements IStorage {
       lastAccessedAt: new Date(),
     };
     this.userProgress.set(progress.id, updated);
+    return updated;
+  }
+
+  // Task methods
+  async getUserTasks(userId: string): Promise<Task[]> {
+    return Array.from(this.tasks.values())
+      .filter((task) => task.userId === userId)
+      .sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
+  }
+
+  async getTask(id: string): Promise<Task | undefined> {
+    return this.tasks.get(id);
+  }
+
+  async createTask(insertTask: InsertTask): Promise<Task> {
+    const id = randomUUID();
+    const task: Task = {
+      ...insertTask,
+      id,
+      completed: false,
+      createdAt: new Date(),
+      completedAt: null,
+    };
+    this.tasks.set(id, task);
+    return task;
+  }
+
+  async updateTask(taskId: string, updates: Partial<Task>): Promise<Task> {
+    const task = this.tasks.get(taskId);
+    if (!task) throw new Error("Task not found");
+    
+    const updated: Task = {
+      ...task,
+      ...updates,
+    };
+    this.tasks.set(taskId, updated);
+    return updated;
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    this.tasks.delete(taskId);
+  }
+
+  // StudySession methods
+  async getUserStudySessions(userId: string): Promise<StudySession[]> {
+    return Array.from(this.studySessions.values())
+      .filter((session) => session.userId === userId)
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+  }
+
+  async getStudySession(id: string): Promise<StudySession | undefined> {
+    return this.studySessions.get(id);
+  }
+
+  async createStudySession(insertSession: InsertStudySession): Promise<StudySession> {
+    const id = randomUUID();
+    const session: StudySession = {
+      ...insertSession,
+      id,
+      xpEarned: 0,
+      completed: false,
+      startedAt: new Date(),
+      completedAt: null,
+    };
+    this.studySessions.set(id, session);
+    return session;
+  }
+
+  async updateStudySession(sessionId: string, updates: Partial<StudySession>): Promise<StudySession> {
+    const session = this.studySessions.get(sessionId);
+    if (!session) throw new Error("Study session not found");
+    
+    const updated: StudySession = {
+      ...session,
+      ...updates,
+    };
+    this.studySessions.set(sessionId, updated);
+    return updated;
+  }
+
+  // Friendship methods
+  async getUserFriendships(userId: string): Promise<Friendship[]> {
+    return Array.from(this.friendships.values()).filter(
+      (friendship) =>
+        friendship.userId === userId || friendship.friendId === userId
+    );
+  }
+
+  async getFriendship(id: string): Promise<Friendship | undefined> {
+    return this.friendships.get(id);
+  }
+
+  async createFriendship(insertFriendship: InsertFriendship): Promise<Friendship> {
+    const id = randomUUID();
+    const friendship: Friendship = {
+      ...insertFriendship,
+      id,
+      status: "pending",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.friendships.set(id, friendship);
+    return friendship;
+  }
+
+  async updateFriendship(friendshipId: string, updates: Partial<Friendship>): Promise<Friendship> {
+    const friendship = this.friendships.get(friendshipId);
+    if (!friendship) throw new Error("Friendship not found");
+    
+    const updated: Friendship = {
+      ...friendship,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.friendships.set(friendshipId, updated);
+    return updated;
+  }
+
+  async deleteFriendship(friendshipId: string): Promise<void> {
+    this.friendships.delete(friendshipId);
+  }
+
+  // Group methods
+  async getGroup(id: string): Promise<Group | undefined> {
+    return this.groups.get(id);
+  }
+
+  async getAllGroups(): Promise<Group[]> {
+    return Array.from(this.groups.values());
+  }
+
+  async getUserGroups(userId: string): Promise<Group[]> {
+    const userMemberships = Array.from(this.groupMembers.values()).filter(
+      (member) => member.userId === userId
+    );
+    const groupIds = userMemberships.map((m) => m.groupId);
+    return Array.from(this.groups.values()).filter((g) =>
+      groupIds.includes(g.id)
+    );
+  }
+
+  async createGroup(insertGroup: InsertGroup): Promise<Group> {
+    const id = randomUUID();
+    const group: Group = {
+      ...insertGroup,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.groups.set(id, group);
+    return group;
+  }
+
+  async updateGroup(groupId: string, updates: Partial<Group>): Promise<Group> {
+    const group = this.groups.get(groupId);
+    if (!group) throw new Error("Group not found");
+    
+    const updated: Group = {
+      ...group,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.groups.set(groupId, updated);
+    return updated;
+  }
+
+  // GroupMember methods
+  async getGroupMembers(groupId: string): Promise<GroupMember[]> {
+    return Array.from(this.groupMembers.values()).filter(
+      (member) => member.groupId === groupId
+    );
+  }
+
+  async createGroupMember(insertMember: InsertGroupMember): Promise<GroupMember> {
+    const id = randomUUID();
+    const member: GroupMember = {
+      ...insertMember,
+      id,
+      joinedAt: new Date(),
+    };
+    this.groupMembers.set(id, member);
+    return member;
+  }
+
+  async deleteGroupMember(groupId: string, userId: string): Promise<void> {
+    const member = Array.from(this.groupMembers.values()).find(
+      (m) => m.groupId === groupId && m.userId === userId
+    );
+    if (member) {
+      this.groupMembers.delete(member.id);
+    }
+  }
+
+  // Streak methods
+  async getUserStreak(userId: string): Promise<Streak | undefined> {
+    return Array.from(this.streaks.values()).find(
+      (streak) => streak.userId === userId
+    );
+  }
+
+  async createStreak(insertStreak: InsertStreak): Promise<Streak> {
+    const id = randomUUID();
+    const streak: Streak = {
+      ...insertStreak,
+      id,
+      currentStreak: 0,
+      longestStreak: 0,
+      lastStudyDate: null,
+      updatedAt: new Date(),
+    };
+    this.streaks.set(id, streak);
+    return streak;
+  }
+
+  async updateStreak(userId: string, updates: Partial<Streak>): Promise<Streak> {
+    const streak = await this.getUserStreak(userId);
+    if (!streak) throw new Error("Streak not found");
+    
+    const updated: Streak = {
+      ...streak,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.streaks.set(streak.id, updated);
     return updated;
   }
 }
