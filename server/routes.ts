@@ -23,6 +23,11 @@ import {
   groupMembers,
   groupChallenges,
   groupMessages,
+  shopItems,
+  userInventory,
+  userCoins,
+  levels,
+  userLevels,
   insertUserSchema,
   insertUserStatsSchema,
   insertGameSchema,
@@ -43,7 +48,24 @@ import {
   insertGroupMemberSchema,
   insertGroupChallengeSchema,
   insertGroupMessageSchema,
+  insertShopItemSchema,
+  insertUserInventorySchema,
+  insertUserCoinsSchema,
+  insertLevelSchema,
+  insertUserLevelSchema,
 } from "@shared/schema";
+import {
+  calculateStudySessionXP,
+  calculateTaskCompletionXP,
+  awardXP,
+  awardCoins,
+  spendCoins,
+  updateStreak,
+  checkAndAwardAchievements,
+  initializeLevels,
+  initializeBadges,
+  getLevelFromXP,
+} from "./services/gamification";
 import { eq, desc, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { setupWebSocket, broadcastLeaderboardUpdate } from "./websocket";
@@ -1914,6 +1936,605 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json({ message: "Database seeded successfully" });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== PHASE 6: Gamification Backend & Advanced Features =====
+  
+  // Initialize levels and badges on server start
+  initializeLevels().catch(console.error);
+  initializeBadges().catch(console.error);
+  
+  // ==== XP & Level System Routes ====
+  
+  // Get user level info
+  app.get("/api/users/:userId/level", async (req, res) => {
+    try {
+      const [userLevel] = await db
+        .select()
+        .from(userLevels)
+        .where(eq(userLevels.userId, req.params.userId))
+        .limit(1);
+      
+      if (!userLevel) {
+        return res.status(404).json({ error: "User level not found" });
+      }
+      
+      const levelInfo = await getLevelFromXP(userLevel.totalXp);
+      
+      res.json({
+        ...userLevel,
+        ...levelInfo,
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Award XP to user (used after completing sessions, tasks, games)
+  app.post("/api/users/:userId/xp", async (req, res) => {
+    try {
+      const { amount, reason } = req.body;
+      
+      if (typeof amount !== "number" || amount <= 0) {
+        return res.status(400).json({ error: "Invalid XP amount" });
+      }
+      
+      const result = await awardXP(req.params.userId, amount);
+      
+      // Check for new achievements
+      const newBadges = await checkAndAwardAchievements(req.params.userId);
+      
+      // Update streak
+      const streakResult = await updateStreak(req.params.userId);
+      
+      // Broadcast leaderboard update
+      broadcastLeaderboardUpdate();
+      
+      res.json({
+        ...result,
+        newBadges,
+        streak: streakResult,
+        reason: reason || "XP awarded",
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get all levels
+  app.get("/api/levels", async (req, res) => {
+    try {
+      const levelList = await db
+        .select()
+        .from(levels)
+        .orderBy(levels.levelNumber);
+      
+      res.json(levelList);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // ==== Coins System Routes ====
+  
+  // Get user coins
+  app.get("/api/users/:userId/coins", async (req, res) => {
+    try {
+      const [coins] = await db
+        .select()
+        .from(userCoins)
+        .where(eq(userCoins.userId, req.params.userId))
+        .limit(1);
+      
+      if (!coins) {
+        // Create default coins record
+        const [newCoins] = await db
+          .insert(userCoins)
+          .values({ userId: req.params.userId })
+          .returning();
+        
+        return res.json(newCoins);
+      }
+      
+      res.json(coins);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Award coins (manual or system)
+  app.post("/api/users/:userId/coins/award", async (req, res) => {
+    try {
+      const { amount, reason } = req.body;
+      
+      if (typeof amount !== "number" || amount <= 0) {
+        return res.status(400).json({ error: "Invalid coin amount" });
+      }
+      
+      const result = await awardCoins(req.params.userId, amount, reason || "Coins awarded");
+      
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // ==== Streak System Routes ====
+  
+  // Get user streak
+  app.get("/api/users/:userId/streak", async (req, res) => {
+    try {
+      const [streak] = await db
+        .select()
+        .from(streaks)
+        .where(eq(streaks.userId, req.params.userId))
+        .limit(1);
+      
+      if (!streak) {
+        // Create default streak record
+        const [newStreak] = await db
+          .insert(streaks)
+          .values({ userId: req.params.userId })
+          .returning();
+        
+        return res.json(newStreak);
+      }
+      
+      res.json(streak);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Update streak (called after study session)
+  app.post("/api/users/:userId/streak/update", async (req, res) => {
+    try {
+      const result = await updateStreak(req.params.userId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // ==== Badge System Routes ====
+  
+  // Get all badges (definitions)
+  app.get("/api/badges", async (req, res) => {
+    try {
+      const allBadges = await db.select().from(badges);
+      res.json(allBadges);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get user badges
+  app.get("/api/users/:userId/badges", async (req, res) => {
+    try {
+      const userBadgesList = await db
+        .select({
+          id: userBadges.id,
+          earnedAt: userBadges.earnedAt,
+          badge: badges,
+        })
+        .from(userBadges)
+        .innerJoin(badges, eq(userBadges.badgeId, badges.id))
+        .where(eq(userBadges.userId, req.params.userId));
+      
+      res.json(userBadgesList);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // ==== Friend System Routes ====
+  
+  // Get user friends
+  app.get("/api/users/:userId/friends", async (req, res) => {
+    try {
+      const friendsList = await db
+        .select({
+          friendship: friendships,
+          friend: users,
+        })
+        .from(friendships)
+        .innerJoin(users, eq(friendships.friendId, users.id))
+        .where(eq(friendships.userId, req.params.userId));
+      
+      const friendsData = friendsList.map(({ friendship, friend }) => ({
+        id: friendship.id,
+        friendId: friend.id,
+        fullName: friend.fullName,
+        avatarUrl: friend.avatarUrl,
+        points: friend.points,
+        status: friendship.status,
+        createdAt: friendship.createdAt,
+      }));
+      
+      res.json(friendsData);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Send friend request
+  app.post("/api/users/:userId/friends/request", async (req, res) => {
+    try {
+      const { friendId } = req.body;
+      
+      if (!friendId) {
+        return res.status(400).json({ error: "Friend ID required" });
+      }
+      
+      // Check if friendship already exists
+      const [existing] = await db
+        .select()
+        .from(friendships)
+        .where(
+          sql`(${friendships.userId} = ${req.params.userId} AND ${friendships.friendId} = ${friendId}) OR (${friendships.userId} = ${friendId} AND ${friendships.friendId} = ${req.params.userId})`
+        )
+        .limit(1);
+      
+      if (existing) {
+        return res.status(400).json({ error: "Friendship already exists" });
+      }
+      
+      // Create friend request
+      const [friendship] = await db
+        .insert(friendships)
+        .values({
+          userId: req.params.userId,
+          friendId,
+          status: "pending",
+        })
+        .returning();
+      
+      res.json(friendship);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Accept/reject friend request
+  app.patch("/api/friendships/:friendshipId", async (req, res) => {
+    try {
+      const { status } = req.body;
+      
+      if (!["accepted", "rejected"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+      
+      const [updated] = await db
+        .update(friendships)
+        .set({ status, updatedAt: new Date() })
+        .where(eq(friendships.id, req.params.friendshipId))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Friendship not found" });
+      }
+      
+      // If accepted, create reciprocal friendship
+      if (status === "accepted") {
+        const [reciprocal] = await db
+          .select()
+          .from(friendships)
+          .where(
+            sql`${friendships.userId} = ${updated.friendId} AND ${friendships.friendId} = ${updated.userId}`
+          )
+          .limit(1);
+        
+        if (!reciprocal) {
+          await db.insert(friendships).values({
+            userId: updated.friendId,
+            friendId: updated.userId,
+            status: "accepted",
+          });
+        }
+      }
+      
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get friend leaderboard
+  app.get("/api/users/:userId/friends/leaderboard", async (req, res) => {
+    try {
+      // Get accepted friends
+      const friendsList = await db
+        .select({ friendId: friendships.friendId })
+        .from(friendships)
+        .where(
+          sql`${friendships.userId} = ${req.params.userId} AND ${friendships.status} = 'accepted'`
+        );
+      
+      const friendIds = friendsList.map((f) => f.friendId);
+      friendIds.push(req.params.userId); // Include current user
+      
+      if (friendIds.length === 0) {
+        return res.json([]);
+      }
+      
+      const leaderboard = await db
+        .select({
+          userId: userStats.userId,
+          totalPoints: userStats.totalPoints,
+          currentRank: userStats.currentRank,
+          fullName: users.fullName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(userStats)
+        .innerJoin(users, eq(userStats.userId, users.id))
+        .where(inArray(userStats.userId, friendIds))
+        .orderBy(desc(userStats.totalPoints));
+      
+      res.json(leaderboard);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // ==== Reward Shop Routes ====
+  
+  // Get all shop items
+  app.get("/api/shop/items", async (req, res) => {
+    try {
+      const { category } = req.query;
+      
+      let query = db.select().from(shopItems).where(eq(shopItems.isActive, true));
+      
+      if (category && typeof category === "string") {
+        query = db
+          .select()
+          .from(shopItems)
+          .where(
+            sql`${shopItems.isActive} = true AND ${shopItems.category} = ${category}`
+          );
+      }
+      
+      const items = await query;
+      res.json(items);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Purchase shop item
+  app.post("/api/users/:userId/shop/purchase", async (req, res) => {
+    try {
+      const { shopItemId } = req.body;
+      
+      if (!shopItemId) {
+        return res.status(400).json({ error: "Shop item ID required" });
+      }
+      
+      // Get shop item
+      const [item] = await db
+        .select()
+        .from(shopItems)
+        .where(eq(shopItems.id, shopItemId))
+        .limit(1);
+      
+      if (!item || !item.isActive) {
+        return res.status(404).json({ error: "Item not found or not available" });
+      }
+      
+      // Check if already owned
+      const [existing] = await db
+        .select()
+        .from(userInventory)
+        .where(
+          sql`${userInventory.userId} = ${req.params.userId} AND ${userInventory.shopItemId} = ${shopItemId}`
+        )
+        .limit(1);
+      
+      if (existing) {
+        return res.status(400).json({ error: "Item already owned" });
+      }
+      
+      // Spend coins
+      const spendResult = await spendCoins(req.params.userId, item.coinCost);
+      
+      if (!spendResult.success) {
+        return res.status(400).json({ error: spendResult.error });
+      }
+      
+      // Add to inventory
+      const [inventoryItem] = await db
+        .insert(userInventory)
+        .values({
+          userId: req.params.userId,
+          shopItemId,
+        })
+        .returning();
+      
+      res.json({
+        inventoryItem,
+        newBalance: spendResult.newBalance,
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get user inventory
+  app.get("/api/users/:userId/inventory", async (req, res) => {
+    try {
+      const inventory = await db
+        .select({
+          id: userInventory.id,
+          isEquipped: userInventory.isEquipped,
+          purchasedAt: userInventory.purchasedAt,
+          item: shopItems,
+        })
+        .from(userInventory)
+        .innerJoin(shopItems, eq(userInventory.shopItemId, shopItems.id))
+        .where(eq(userInventory.userId, req.params.userId));
+      
+      res.json(inventory);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Equip/unequip inventory item
+  app.patch("/api/users/:userId/inventory/:itemId/equip", async (req, res) => {
+    try {
+      const { isEquipped } = req.body;
+      
+      if (typeof isEquipped !== "boolean") {
+        return res.status(400).json({ error: "isEquipped must be boolean" });
+      }
+      
+      // If equipping, unequip other items of the same category
+      if (isEquipped) {
+        const [item] = await db
+          .select({
+            category: shopItems.category,
+          })
+          .from(userInventory)
+          .innerJoin(shopItems, eq(userInventory.shopItemId, shopItems.id))
+          .where(eq(userInventory.id, req.params.itemId))
+          .limit(1);
+        
+        if (item) {
+          // Unequip all items of same category
+          await db
+            .update(userInventory)
+            .set({ isEquipped: false })
+            .where(
+              sql`${userInventory.userId} = ${req.params.userId} AND ${userInventory.shopItemId} IN (SELECT id FROM ${shopItems} WHERE ${shopItems.category} = ${item.category})`
+            );
+        }
+      }
+      
+      // Update the item
+      const [updated] = await db
+        .update(userInventory)
+        .set({ isEquipped })
+        .where(eq(userInventory.id, req.params.itemId))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // ==== Group Leaderboards & Competitions ====
+  
+  // Get group leaderboard
+  app.get("/api/groups/:groupId/leaderboard", async (req, res) => {
+    try {
+      const membersList = await db
+        .select({ userId: groupMembers.userId })
+        .from(groupMembers)
+        .where(eq(groupMembers.groupId, req.params.groupId));
+      
+      const memberIds = membersList.map((m) => m.userId);
+      
+      if (memberIds.length === 0) {
+        return res.json([]);
+      }
+      
+      const leaderboard = await db
+        .select({
+          userId: userStats.userId,
+          totalPoints: userStats.totalPoints,
+          currentRank: userStats.currentRank,
+          fullName: users.fullName,
+          avatarUrl: users.avatarUrl,
+          role: groupMembers.role,
+        })
+        .from(userStats)
+        .innerJoin(users, eq(userStats.userId, users.id))
+        .innerJoin(groupMembers, eq(groupMembers.userId, users.id))
+        .where(
+          sql`${groupMembers.groupId} = ${req.params.groupId} AND ${inArray(userStats.userId, memberIds)}`
+        )
+        .orderBy(desc(userStats.totalPoints));
+      
+      res.json(leaderboard);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get group challenge progress
+  app.get("/api/groups/:groupId/challenges/:challengeId/progress", async (req, res) => {
+    try {
+      const [challenge] = await db
+        .select()
+        .from(groupChallenges)
+        .where(eq(groupChallenges.id, req.params.challengeId))
+        .limit(1);
+      
+      if (!challenge) {
+        return res.status(404).json({ error: "Challenge not found" });
+      }
+      
+      // Get all members
+      const membersList = await db
+        .select({ userId: groupMembers.userId })
+        .from(groupMembers)
+        .where(eq(groupMembers.groupId, req.params.groupId));
+      
+      const memberIds = membersList.map((m) => m.userId);
+      
+      // Calculate progress based on challenge type
+      let progress: any[] = [];
+      
+      if (challenge.challengeType === "points") {
+        progress = await db
+          .select({
+            userId: users.id,
+            fullName: users.fullName,
+            avatarUrl: users.avatarUrl,
+            value: userStats.totalPoints,
+          })
+          .from(users)
+          .innerJoin(userStats, eq(userStats.userId, users.id))
+          .where(inArray(users.id, memberIds))
+          .orderBy(desc(userStats.totalPoints));
+      } else if (challenge.challengeType === "study_sessions") {
+        progress = await db
+          .select({
+            userId: users.id,
+            fullName: users.fullName,
+            avatarUrl: users.avatarUrl,
+            value: userStats.studySessions,
+          })
+          .from(users)
+          .innerJoin(userStats, eq(userStats.userId, users.id))
+          .where(inArray(users.id, memberIds))
+          .orderBy(desc(userStats.studySessions));
+      } else if (challenge.challengeType === "games_completed") {
+        progress = await db
+          .select({
+            userId: users.id,
+            fullName: users.fullName,
+            avatarUrl: users.avatarUrl,
+            value: userStats.gamesPlayed,
+          })
+          .from(users)
+          .innerJoin(userStats, eq(userStats.userId, users.id))
+          .where(inArray(users.id, memberIds))
+          .orderBy(desc(userStats.gamesPlayed));
+      }
+      
+      res.json({
+        challenge,
+        progress,
+      });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

@@ -391,3 +391,102 @@ export const insertGroupMessageSchema = createInsertSchema(groupMessages).omit({
 
 export type InsertGroupMessage = z.infer<typeof insertGroupMessageSchema>;
 export type GroupMessage = typeof groupMessages.$inferSelect;
+
+// Shop Items table - defines purchasable items in the reward shop
+export const shopItems = pgTable("shop_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(), // 'avatar', 'theme', 'sound', 'badge'
+  itemType: text("item_type").notNull(), // specific type like 'avatar_hair', 'theme_dark', etc.
+  coinCost: integer("coin_cost").notNull(),
+  xpCost: integer("xp_cost").notNull().default(0),
+  previewUrl: text("preview_url"),
+  itemData: text("item_data"), // JSON string for item-specific data
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertShopItemSchema = createInsertSchema(shopItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertShopItem = z.infer<typeof insertShopItemSchema>;
+export type ShopItem = typeof shopItems.$inferSelect;
+
+// User Inventory table - tracks items owned by users
+export const userInventory = pgTable("user_inventory", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  shopItemId: varchar("shop_item_id").notNull().references(() => shopItems.id, { onDelete: "cascade" }),
+  isEquipped: boolean("is_equipped").notNull().default(false), // for avatars, themes, sounds
+  purchasedAt: timestamp("purchased_at").notNull().defaultNow(),
+});
+
+export const insertUserInventorySchema = createInsertSchema(userInventory).omit({
+  id: true,
+  purchasedAt: true,
+});
+
+export type InsertUserInventory = z.infer<typeof insertUserInventorySchema>;
+export type UserInventory = typeof userInventory.$inferSelect;
+
+// User Coins - virtual currency tracking (adding to users table via coins column)
+// We'll extend the users table with a coins field
+export const userCoins = pgTable("user_coins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  balance: integer("balance").notNull().default(0),
+  totalEarned: integer("total_earned").notNull().default(0),
+  totalSpent: integer("total_spent").notNull().default(0),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertUserCoinsSchema = createInsertSchema(userCoins).omit({
+  id: true,
+  balance: true,
+  totalEarned: true,
+  totalSpent: true,
+  updatedAt: true,
+});
+
+export type InsertUserCoins = z.infer<typeof insertUserCoinsSchema>;
+export type UserCoins = typeof userCoins.$inferSelect;
+
+// Levels table - defines XP thresholds for each level
+export const levels = pgTable("levels", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  levelNumber: integer("level_number").notNull().unique(),
+  xpRequired: integer("xp_required").notNull(),
+  title: text("title").notNull(), // e.g., "Beginner", "Scholar", "Master"
+  rewards: text("rewards"), // JSON string of rewards (coins, items, etc.)
+});
+
+export const insertLevelSchema = createInsertSchema(levels).omit({
+  id: true,
+});
+
+export type InsertLevel = z.infer<typeof insertLevelSchema>;
+export type Level = typeof levels.$inferSelect;
+
+// User Levels - tracks current user level
+export const userLevels = pgTable("user_levels", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  currentLevel: integer("current_level").notNull().default(1),
+  currentXp: integer("current_xp").notNull().default(0),
+  totalXp: integer("total_xp").notNull().default(0),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertUserLevelSchema = createInsertSchema(userLevels).omit({
+  id: true,
+  currentLevel: true,
+  currentXp: true,
+  totalXp: true,
+  updatedAt: true,
+});
+
+export type InsertUserLevel = z.infer<typeof insertUserLevelSchema>;
+export type UserLevel = typeof userLevels.$inferSelect;
