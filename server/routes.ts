@@ -18,6 +18,10 @@ import {
   streaks,
   badges,
   userBadges,
+  friendships,
+  groups,
+  groupMembers,
+  groupChallenges,
   insertUserSchema,
   insertUserStatsSchema,
   insertGameSchema,
@@ -33,6 +37,10 @@ import {
   insertStreakSchema,
   insertBadgeSchema,
   insertUserBadgeSchema,
+  insertFriendshipSchema,
+  insertGroupSchema,
+  insertGroupMemberSchema,
+  insertGroupChallengeSchema,
 } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -314,6 +322,467 @@ export async function registerRoutes(app: Express): Promise<Server> {
       broadcastLeaderboardUpdate();
 
       res.json(updatedStats);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== Friend System Routes =====
+  
+  // Send friend request
+  app.post("/api/friends/request", async (req, res) => {
+    try {
+      const { userId, friendId } = req.body;
+      
+      if (!userId || !friendId) {
+        return res.status(400).json({ error: "User ID and Friend ID required" });
+      }
+      
+      if (userId === friendId) {
+        return res.status(400).json({ error: "Cannot send friend request to yourself" });
+      }
+      
+      // Check if friendship already exists
+      const existing = await db
+        .select()
+        .from(friendships)
+        .where(
+          sql`(${friendships.userId} = ${userId} AND ${friendships.friendId} = ${friendId}) OR (${friendships.userId} = ${friendId} AND ${friendships.friendId} = ${userId})`
+        )
+        .limit(1);
+      
+      if (existing.length > 0) {
+        return res.status(400).json({ error: "Friend request already exists" });
+      }
+      
+      const [friendship] = await db
+        .insert(friendships)
+        .values({ userId, friendId, status: 'pending' })
+        .returning();
+      
+      res.json(friendship);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Accept friend request
+  app.patch("/api/friends/:friendshipId/accept", async (req, res) => {
+    try {
+      const { friendshipId } = req.params;
+      
+      const [updated] = await db
+        .update(friendships)
+        .set({ status: 'accepted', updatedAt: new Date() })
+        .where(eq(friendships.id, friendshipId))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Friend request not found" });
+      }
+      
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Reject friend request
+  app.patch("/api/friends/:friendshipId/reject", async (req, res) => {
+    try {
+      const { friendshipId } = req.params;
+      
+      const [updated] = await db
+        .update(friendships)
+        .set({ status: 'rejected', updatedAt: new Date() })
+        .where(eq(friendships.id, friendshipId))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Friend request not found" });
+      }
+      
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Remove friend
+  app.delete("/api/friends/:friendshipId", async (req, res) => {
+    try {
+      const { friendshipId } = req.params;
+      
+      await db
+        .delete(friendships)
+        .where(eq(friendships.id, friendshipId));
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get user's friends (accepted friendships)
+  app.get("/api/friends/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      const userFriends = await db
+        .select({
+          friendshipId: friendships.id,
+          userId: users.id,
+          fullName: users.fullName,
+          email: users.email,
+          points: users.points,
+          rank: users.rank,
+          avatarUrl: users.avatarUrl,
+          status: friendships.status,
+          createdAt: friendships.createdAt,
+        })
+        .from(friendships)
+        .innerJoin(users, sql`(
+          (${friendships.userId} = ${userId} AND ${friendships.friendId} = ${users.id}) OR
+          (${friendships.friendId} = ${userId} AND ${friendships.userId} = ${users.id})
+        )`)
+        .where(eq(friendships.status, 'accepted'));
+      
+      res.json(userFriends);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get pending friend requests for a user
+  app.get("/api/friends/:userId/requests", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      const requests = await db
+        .select({
+          friendshipId: friendships.id,
+          userId: users.id,
+          fullName: users.fullName,
+          email: users.email,
+          avatarUrl: users.avatarUrl,
+          createdAt: friendships.createdAt,
+        })
+        .from(friendships)
+        .innerJoin(users, eq(friendships.userId, users.id))
+        .where(sql`${friendships.friendId} = ${userId} AND ${friendships.status} = 'pending'`);
+      
+      res.json(requests);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Search users (for adding friends)
+  app.get("/api/users/search", async (req, res) => {
+    try {
+      const { query } = req.query;
+      
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: "Search query required" });
+      }
+      
+      const searchResults = await db
+        .select({
+          id: users.id,
+          fullName: users.fullName,
+          email: users.email,
+          points: users.points,
+          rank: users.rank,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(users)
+        .where(sql`LOWER(${users.fullName}) LIKE LOWER(${'%' + query + '%'}) OR LOWER(${users.email}) LIKE LOWER(${'%' + query + '%'})`)
+        .limit(10);
+      
+      res.json(searchResults);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== Social Groups Routes =====
+  
+  // Create a new group
+  app.post("/api/groups", async (req, res) => {
+    try {
+      const validatedData = insertGroupSchema.parse(req.body);
+      
+      const [newGroup] = await db
+        .insert(groups)
+        .values(validatedData)
+        .returning();
+      
+      // Automatically add creator as owner
+      await db
+        .insert(groupMembers)
+        .values({
+          groupId: newGroup.id,
+          userId: validatedData.ownerId,
+          role: 'owner',
+        });
+      
+      res.json(newGroup);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get all public groups
+  app.get("/api/groups", async (req, res) => {
+    try {
+      const publicGroups = await db
+        .select({
+          id: groups.id,
+          name: groups.name,
+          description: groups.description,
+          avatarUrl: groups.avatarUrl,
+          isPublic: groups.isPublic,
+          ownerId: groups.ownerId,
+          ownerName: users.fullName,
+          createdAt: groups.createdAt,
+          memberCount: sql<number>`COUNT(DISTINCT ${groupMembers.id})`,
+        })
+        .from(groups)
+        .leftJoin(groupMembers, eq(groups.id, groupMembers.groupId))
+        .leftJoin(users, eq(groups.ownerId, users.id))
+        .where(eq(groups.isPublic, true))
+        .groupBy(groups.id, users.fullName);
+      
+      res.json(publicGroups);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get user's groups
+  app.get("/api/groups/user/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      const userGroups = await db
+        .select({
+          id: groups.id,
+          name: groups.name,
+          description: groups.description,
+          avatarUrl: groups.avatarUrl,
+          isPublic: groups.isPublic,
+          ownerId: groups.ownerId,
+          role: groupMembers.role,
+          joinedAt: groupMembers.joinedAt,
+          memberCount: sql<number>`COUNT(DISTINCT gm.id)`,
+        })
+        .from(groupMembers)
+        .innerJoin(groups, eq(groupMembers.groupId, groups.id))
+        .leftJoin(groupMembers.as('gm'), eq(groups.id, sql`gm.group_id`))
+        .where(eq(groupMembers.userId, userId))
+        .groupBy(groups.id, groupMembers.role, groupMembers.joinedAt);
+      
+      res.json(userGroups);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get group details
+  app.get("/api/groups/:groupId", async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      
+      const [group] = await db
+        .select()
+        .from(groups)
+        .where(eq(groups.id, groupId))
+        .limit(1);
+      
+      if (!group) {
+        return res.status(404).json({ error: "Group not found" });
+      }
+      
+      res.json(group);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Join a group
+  app.post("/api/groups/:groupId/join", async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ error: "User ID required" });
+      }
+      
+      // Check if user is already a member
+      const existing = await db
+        .select()
+        .from(groupMembers)
+        .where(sql`${groupMembers.groupId} = ${groupId} AND ${groupMembers.userId} = ${userId}`)
+        .limit(1);
+      
+      if (existing.length > 0) {
+        return res.status(400).json({ error: "Already a member of this group" });
+      }
+      
+      const [membership] = await db
+        .insert(groupMembers)
+        .values({
+          groupId,
+          userId,
+          role: 'member',
+        })
+        .returning();
+      
+      res.json(membership);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Leave a group
+  app.post("/api/groups/:groupId/leave", async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const { userId } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ error: "User ID required" });
+      }
+      
+      await db
+        .delete(groupMembers)
+        .where(sql`${groupMembers.groupId} = ${groupId} AND ${groupMembers.userId} = ${userId}`);
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get group members
+  app.get("/api/groups/:groupId/members", async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      
+      const members = await db
+        .select({
+          membershipId: groupMembers.id,
+          userId: users.id,
+          fullName: users.fullName,
+          email: users.email,
+          avatarUrl: users.avatarUrl,
+          points: users.points,
+          rank: users.rank,
+          role: groupMembers.role,
+          joinedAt: groupMembers.joinedAt,
+        })
+        .from(groupMembers)
+        .innerJoin(users, eq(groupMembers.userId, users.id))
+        .where(eq(groupMembers.groupId, groupId))
+        .orderBy(desc(users.points));
+      
+      res.json(members);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get group leaderboard
+  app.get("/api/groups/:groupId/leaderboard", async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      
+      const leaderboard = await db
+        .select({
+          userId: users.id,
+          fullName: users.fullName,
+          avatarUrl: users.avatarUrl,
+          points: users.points,
+          rank: users.rank,
+          gamesPlayed: userStats.gamesPlayed,
+          studySessions: userStats.studySessions,
+          role: groupMembers.role,
+        })
+        .from(groupMembers)
+        .innerJoin(users, eq(groupMembers.userId, users.id))
+        .leftJoin(userStats, eq(users.id, userStats.userId))
+        .where(eq(groupMembers.groupId, groupId))
+        .orderBy(desc(users.points));
+      
+      res.json(leaderboard);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get group activity feed
+  app.get("/api/groups/:groupId/activities", async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      const activities = await db
+        .select({
+          activityId: userActivities.id,
+          userId: users.id,
+          fullName: users.fullName,
+          avatarUrl: users.avatarUrl,
+          activityType: userActivities.activityType,
+          activityTitle: userActivities.activityTitle,
+          pointsEarned: userActivities.pointsEarned,
+          timestamp: userActivities.timestamp,
+        })
+        .from(groupMembers)
+        .innerJoin(users, eq(groupMembers.userId, users.id))
+        .innerJoin(userActivities, eq(users.id, userActivities.userId))
+        .where(eq(groupMembers.groupId, groupId))
+        .orderBy(desc(userActivities.timestamp))
+        .limit(limit);
+      
+      res.json(activities);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Create group challenge
+  app.post("/api/groups/:groupId/challenges", async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const validatedData = insertGroupChallengeSchema.parse({
+        ...req.body,
+        groupId,
+      });
+      
+      const [challenge] = await db
+        .insert(groupChallenges)
+        .values(validatedData)
+        .returning();
+      
+      res.json(challenge);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
+  // Get group challenges
+  app.get("/api/groups/:groupId/challenges", async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      
+      const challenges = await db
+        .select()
+        .from(groupChallenges)
+        .where(eq(groupChallenges.groupId, groupId))
+        .orderBy(desc(groupChallenges.createdAt));
+      
+      res.json(challenges);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
