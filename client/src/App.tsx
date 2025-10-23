@@ -27,8 +27,9 @@ import {
   LazyGuest,
   LazyPomodoro,
   LazyTasks,
+  LazyGroups,
 } from "@/lib/lazy-components";
-import LeaderboardSimple from "@/pages/leaderboard-simple";
+import Leaderboard from "@/pages/leaderboard";
 
 function Router() {
   const { user, logout } = useAuth();
@@ -57,11 +58,12 @@ function Router() {
             <Route path="/dashboard" component={LazyDashboard} />
             <Route path="/pomodoro" component={LazyPomodoro} />
             <Route path="/tasks" component={LazyTasks} />
-            <Route path="/leaderboard" component={LeaderboardSimple} />
+            <Route path="/leaderboard" component={Leaderboard} />
             <Route path="/profile" component={LazyProfile} />
             <Route path="/study" component={LazyStudy} />
             <Route path="/games" component={LazyGames} />
             <Route path="/games/:gameId" component={LazyGamePlay} />
+            <Route path="/groups" component={LazyGroups} />
             <Route path="/guest" component={LazyGuest} />
             <Route component={NotFound} />
           </Switch>

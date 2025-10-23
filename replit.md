@@ -2,7 +2,18 @@
 
 ## Overview
 
-DapsiGames is a web-based educational platform designed to gamify learning for students aged 13-25. It integrates competitive elements like leaderboards, achievements, and point systems with educational content and interactive games. Users can track progress, compete globally, and earn rewards. The platform offers both authenticated access with full features and limited guest access for previews. The business vision is to make learning engaging and competitive, leveraging market potential in educational technology and aiming to become a leading gamified learning solution.
+DapsiGames is a web-based educational platform designed to gamify learning for students aged 13-25. It integrates competitive elements like leaderboards, achievements, and point systems with educational content and interactive games. Users can track progress, compete globally, form study groups, and earn rewards. The platform offers both authenticated access with full features and limited guest access for previews. The business vision is to make learning engaging and competitive, leveraging market potential in educational technology and aiming to become a leading gamified learning solution.
+
+## Recent Changes (October 2025)
+
+**Phase 3: Gamification & Social Features - COMPLETED**
+- ✅ Enhanced Leaderboard with podium display, time-period filtering (daily/weekly/monthly), and search
+- ✅ Groups system with create, join, leave, group leaderboards, and activity feeds
+- ✅ Profile page with achievements, friends list, and activity timeline
+- ✅ Friend system integration with leaderboard filtering
+- ✅ Time-based leaderboard using activity aggregation (`/api/activities/all`)
+- ✅ Fixed cache invalidation for group operations
+- ✅ All navigation and routing updated
 
 ## User Preferences
 
@@ -49,17 +60,34 @@ Preferred communication style: Simple, everyday language.
 
 **API Design:**
 - RESTful API endpoints under `/api/`.
-- Authentication, user, games, achievements, study materials, activities, and scores endpoints.
+- **Authentication**: Login, logout, session management.
+- **User Management**: Profile, stats, points updates.
+- **Leaderboard**: Rankings with caching, real-time updates.
+- **Activities**: User activities, all activities (for time filtering).
+- **Games**: Game definitions, scores, completion tracking.
+- **Study Materials**: Materials CRUD, bookmarking, progress.
+- **Achievements**: Definitions, user achievements.
+- **Friends**: Friend requests, accept/decline, friend list.
+- **Groups**: Create, join, leave, members, group leaderboards, activity feeds.
+- **Progress**: Item-specific progress tracking.
 - Real-time WebSocket at `/ws` for leaderboard broadcasts.
 
 **Database Schema:**
-- **users**: Accounts, points, rank.
+- **users**: Accounts, points, rank, avatar.
+- **userStats**: Detailed user statistics for leaderboard.
 - **games**: Game definitions.
-- **achievements**: User-earned badges.
+- **achievementDefinitions**: Available achievements/badges.
+- **userAchievements**: User-earned achievements.
 - **studyMaterials**: Educational content.
-- **userActivities**: Study and game activity logs.
+- **userActivities**: Study and game activity logs with timestamps.
 - **gameScores**: Game performance records.
 - **bookmarks**: User bookmarks for materials.
+- **userProgress**: Progress tracking for materials and games.
+- **groups**: Study group definitions.
+- **groupMembers**: Group membership records.
+- **friendships**: User friendship connections.
+- **groupChallenges**: Group-based challenges (future).
+- **groupActivities**: Group activity feeds (future).
 
 **Authentication & Security:**
 - Password-based auth with bcrypt.
@@ -90,16 +118,40 @@ Preferred communication style: Simple, everyday language.
 - Local storage for guest mode data.
 
 ### Feature Specifications
+
+**Core Features:**
 - **Educational Content**: Study materials with search, filtering, bookmarking, and progress tracking.
 - **Interactive Games**: QuizGame, WordPuzzleGame, MathChallengeGame with varying difficulty, real-time scoring, streaks, combos, and speed bonuses.
-- **Gamification**: Leaderboards, achievements, point systems, badges.
 - **User Management**: Authentication, profile management, activity history.
 - **Guest Mode**: Limited access with upgrade prompts.
 - **Search Functionality**: Across study materials and games with multi-criteria filtering.
+
+**Gamification & Social (Phase 3 - Completed):**
+- **Enhanced Leaderboard**: 
+  - Podium display for top 3 users with visual distinction
+  - Global vs Friends filtering
+  - Time-period filtering (daily, weekly, monthly, all-time) using activity aggregation
+  - User search functionality
+  - Current user position highlighting
+  - Real-time updates via WebSocket
+- **Groups/Social System**:
+  - Create and manage study groups
+  - Public/private group settings
+  - Join/leave groups with immediate cache updates
+  - Group leaderboards showing member rankings
+  - Group activity feeds
+  - Member management
+- **Profile & Achievements**:
+  - User profiles with avatar and stats
+  - Achievement/badge system
+  - Friends list
+  - Activity timeline
+  
+**Technical Features:**
 - **PWA Capabilities**: Offline support, caching, app-like experience.
-- **Security**: Helmet.js, rate limiting, input validation.
-- **Performance**: Response caching, lazy loading with React.Suspense.
-- **Code Quality**: ErrorBoundary, skeleton loaders, ESLint, Prettier.
+- **Security**: Helmet.js, rate limiting, input validation, password hashing.
+- **Performance**: Response caching, lazy loading with React.Suspense, query invalidation.
+- **Code Quality**: ErrorBoundary, skeleton loaders, ESLint, Prettier, TypeScript strict mode.
 
 ## External Dependencies
 

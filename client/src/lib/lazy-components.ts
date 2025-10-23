@@ -9,3 +9,4 @@ export const LazyStudy = lazy(() => import("@/pages/study"));
 export const LazyGuest = lazy(() => import("@/pages/guest"));
 export const LazyPomodoro = lazy(() => import("@/pages/pomodoro"));
 export const LazyTasks = lazy(() => import("@/pages/tasks"));
+export const LazyGroups = lazy(() => import("@/pages/groups"));

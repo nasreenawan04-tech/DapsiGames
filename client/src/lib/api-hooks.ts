@@ -206,7 +206,7 @@ export function useCompleteStudyMaterial() {
 
 // Achievement hooks
 export function useAchievements(userId: string | null | undefined) {
-  return useQuery<Achievement[]>({
+  return useQuery<any[]>({
     queryKey: ["/api/achievements", userId],
     enabled: !!userId,
   });
@@ -217,6 +217,13 @@ export function useActivities(userId: string | null | undefined) {
   return useQuery<UserActivity[]>({
     queryKey: ["/api/activities", userId],
     enabled: !!userId,
+  });
+}
+
+// Get all activities for leaderboard time filtering
+export function useAllActivities() {
+  return useQuery<UserActivity[]>({
+    queryKey: ["/api/activities/all"],
   });
 }
 
@@ -246,6 +253,104 @@ export function useDeleteBookmark() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/bookmarks", variables.userId] });
+    },
+  });
+}
+
+// Group hooks
+export function useGroups() {
+  return useQuery<any[]>({
+    queryKey: ["/api/groups"],
+  });
+}
+
+export function useUserGroups(userId: string | null | undefined) {
+  return useQuery<any[]>({
+    queryKey: ["/api/groups/user", userId],
+    enabled: !!userId,
+  });
+}
+
+export function useGroup(groupId: string | null | undefined) {
+  return useQuery<any>({
+    queryKey: ["/api/groups", groupId],
+    enabled: !!groupId,
+  });
+}
+
+export function useGroupMembers(groupId: string | null | undefined) {
+  return useQuery<any[]>({
+    queryKey: ["/api/groups", groupId, "members"],
+    enabled: !!groupId,
+  });
+}
+
+export function useGroupLeaderboard(groupId: string | null | undefined) {
+  return useQuery<any[]>({
+    queryKey: ["/api/groups", groupId, "leaderboard"],
+    enabled: !!groupId,
+  });
+}
+
+export function useGroupActivities(groupId: string | null | undefined) {
+  return useQuery<any[]>({
+    queryKey: ["/api/groups", groupId, "activities"],
+    enabled: !!groupId,
+  });
+}
+
+export function useGroupChallenges(groupId: string | null | undefined) {
+  return useQuery<any[]>({
+    queryKey: ["/api/groups", groupId, "challenges"],
+    enabled: !!groupId,
+  });
+}
+
+export function useCreateGroup() {
+  return useMutation({
+    mutationFn: async (data: { name: string; description?: string; ownerId: string; isPublic: boolean }) => {
+      return apiRequest("POST", "/api/groups", data);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups/user", variables.ownerId] });
+    },
+  });
+}
+
+export function useJoinGroup() {
+  return useMutation({
+    mutationFn: async ({ groupId, userId }: { groupId: string; userId: string }) => {
+      return apiRequest("POST", `/api/groups/${groupId}/join`, { userId });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", variables.groupId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups/user", variables.userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+    },
+  });
+}
+
+export function useLeaveGroup() {
+  return useMutation({
+    mutationFn: async ({ groupId, userId }: { groupId: string; userId: string }) => {
+      return apiRequest("POST", `/api/groups/${groupId}/leave`, { userId });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", variables.groupId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups/user", variables.userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/groups"] });
+    },
+  });
+}
+
+export function useCreateGroupChallenge() {
+  return useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest("POST", `/api/groups/${data.groupId}/challenges`, data);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/groups", variables.groupId, "challenges"] });
     },
   });
 }

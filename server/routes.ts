@@ -1137,6 +1137,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== User Activity Routes =====
   
+  // Get all activities (for leaderboard time filtering)
+  app.get("/api/activities/all", async (req, res) => {
+    try {
+      const activities = await db
+        .select({
+          id: userActivities.id,
+          userId: userActivities.userId,
+          activityType: userActivities.activityType,
+          activityTitle: userActivities.activityTitle,
+          pointsEarned: userActivities.pointsEarned,
+          timestamp: userActivities.timestamp,
+          fullName: users.fullName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(userActivities)
+        .innerJoin(users, eq(userActivities.userId, users.id))
+        .orderBy(desc(userActivities.timestamp))
+        .limit(1000);
+
+      res.json(activities);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+  
   // Get user activities
   app.get("/api/activities/:userId", async (req, res) => {
     try {

@@ -34,6 +34,7 @@ export function Header({ isAuthenticated = false, user, onLogout }: HeaderProps)
         { path: "/tasks", label: "Tasks" },
         { path: "/study", label: "Study" },
         { path: "/games", label: "Games" },
+        { path: "/groups", label: "Groups" },
         { path: "/leaderboard", label: "Leaderboard" },
       ]
     : [
