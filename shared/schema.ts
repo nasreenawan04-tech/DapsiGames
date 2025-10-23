@@ -237,14 +237,16 @@ export const tasks = pgTable("tasks", {
   completedAt: timestamp("completed_at"),
 });
 
-export const insertTaskSchema = createInsertSchema(tasks).omit({
+export const insertTaskSchema = createInsertSchema(tasks, {
+  description: z.string().optional().nullable(),
+  deadline: z.string().datetime().optional().nullable().or(z.date().optional().nullable()),
+  xpReward: z.number().optional(),
+  bonusXp: z.number().optional(),
+}).omit({
   id: true,
   completed: true,
   createdAt: true,
   completedAt: true,
-}).extend({
-  xpReward: z.number().optional(),
-  bonusXp: z.number().optional(),
 });
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;

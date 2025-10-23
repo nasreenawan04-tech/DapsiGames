@@ -101,6 +101,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: hashedPassword,
       });
 
+      // Initialize user stats and streak
+      if (db) {
+        try {
+          await db.insert(userStats).values({
+            userId: newUser.id,
+            totalPoints: 0,
+            currentRank: 0,
+            gamesPlayed: 0,
+            studySessions: 0,
+          });
+
+          await db.insert(streaks).values({
+            userId: newUser.id,
+            currentStreak: 0,
+            longestStreak: 0,
+          });
+        } catch (error: any) {
+          console.log("Stats initialization skipped:", error.message);
+        }
+      }
+
       const { password, ...userWithoutPassword } = newUser;
       res.json(userWithoutPassword);
     } catch (error: any) {
@@ -226,6 +247,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update user profile
   app.patch("/api/user/:userId/profile", async (req, res) => {
     try {
+      if (!db) {
+        return res.status(503).json({ error: "Database not available" });
+      }
+
       const { fullName, avatarUrl } = req.body;
       
       const updateData: any = {};
@@ -625,25 +650,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(400).json({ error: "User ID required" });
       }
-      
-      // Check if user is already a member
-      try {
-        const existing = await storage.getGroupMembers(groupId);
-        const alreadyMember = existing.some(m => m.userId === userId);
-        
-        if (alreadyMember) {
-          return res.status(400).json({ error: "Already a member of this group" });
-        }
-      } catch (error: any) {
-        // If table doesn't exist or query fails, continue to create member
-        console.log("Error checking existing members:", error.message);
+
+      if (!db) {
+        return res.status(503).json({ error: "Database not available" });
       }
       
-      const membership = await storage.createGroupMember({
-        groupId,
-        userId,
-        role: 'member',
-      });
+      // Check if user is already a member
+      const existing = await db
+        .select()
+        .from(groupMembers)
+        .where(sql`${groupMembers.groupId} = ${groupId} AND ${groupMembers.userId} = ${userId}`)
+        .limit(1);
+      
+      if (existing.length > 0) {
+        return res.status(400).json({ error: "Already a member of this group" });
+      }
+      
+      const [membership] = await db
+        .insert(groupMembers)
+        .values({
+          groupId,
+          userId,
+          role: 'member',
+        })
+        .returning();
       
       res.json(membership);
     } catch (error: any) {

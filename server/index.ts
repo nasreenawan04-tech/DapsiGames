@@ -5,6 +5,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { setupSecurityMiddleware } from "./middleware/security";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
+import { initializeDatabase } from "./init-db";
 
 const app = express();
 
@@ -64,8 +65,8 @@ async function initializeDatabase() {
 
     // This will help identify missing tables
     const result = await db.execute(sql`
-      SELECT table_name 
-      FROM information_schema.tables 
+      SELECT table_name
+      FROM information_schema.tables
       WHERE table_schema = 'public'
     `);
 
@@ -76,7 +77,7 @@ async function initializeDatabase() {
 }
 
 (async () => {
-  // Initialize database
+  // Initialize database tables
   await initializeDatabase();
 
   const server = await registerRoutes(app);
