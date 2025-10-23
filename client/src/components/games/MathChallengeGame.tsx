@@ -357,87 +357,196 @@ export function MathChallengeGame({
   if (isFinished) {
     const accuracy = Math.round((score / numberOfQuestions) * 100);
     const avgSpeed = score > 0 ? formatTime(Math.floor(timeElapsed / score)) : "N/A";
+    const incorrectAnswers = numberOfQuestions - score;
+    const avgPointsPerQuestion = Math.round(totalPoints / numberOfQuestions);
+    const timePerQuestion = Math.round(timeElapsed / numberOfQuestions);
+    
+    // Calculate performance grade
+    const getGrade = () => {
+      if (accuracy === 100) return { letter: "S", color: "text-yellow-400", bg: "from-yellow-500/20 to-yellow-600/10" };
+      if (accuracy >= 95) return { letter: "A+", color: "text-emerald-400", bg: "from-emerald-500/20 to-emerald-600/10" };
+      if (accuracy >= 90) return { letter: "A", color: "text-green-400", bg: "from-green-500/20 to-green-600/10" };
+      if (accuracy >= 85) return { letter: "B+", color: "text-blue-400", bg: "from-blue-500/20 to-blue-600/10" };
+      if (accuracy >= 80) return { letter: "B", color: "text-blue-400", bg: "from-blue-500/20 to-blue-600/10" };
+      if (accuracy >= 75) return { letter: "C+", color: "text-cyan-400", bg: "from-cyan-500/20 to-cyan-600/10" };
+      if (accuracy >= 70) return { letter: "C", color: "text-cyan-400", bg: "from-cyan-500/20 to-cyan-600/10" };
+      return { letter: "D", color: "text-orange-400", bg: "from-orange-500/20 to-orange-600/10" };
+    };
+    
+    const grade = getGrade();
     
     return (
-      <Card className="w-full max-w-2xl mx-auto shadow-2xl border-2 overflow-hidden relative">
+      <Card className="w-full max-w-4xl mx-auto shadow-2xl border-2 overflow-hidden relative animate-in fade-in duration-500">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 pointer-events-none" />
-        <CardHeader className="text-center relative pb-8">
+        
+        {/* Animated confetti effect */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(20)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-2 h-2 rounded-full animate-float"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `-${Math.random() * 20}px`,
+                backgroundColor: ['#fbbf24', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'][Math.floor(Math.random() * 5)],
+                animationDelay: `${Math.random() * 2}s`,
+                animationDuration: `${3 + Math.random() * 2}s`,
+              }}
+            />
+          ))}
+        </div>
+        
+        <CardHeader className="text-center relative pb-6">
           <div className="flex justify-center mb-6">
-            <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary via-primary to-secondary flex items-center justify-center shadow-2xl ring-8 ring-primary/20 animate-pulse">
-              <Trophy className="w-12 h-12 text-white drop-shadow-2xl" />
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary to-secondary rounded-full blur-xl opacity-50 animate-pulse"></div>
+              <div className="h-28 w-28 rounded-full bg-gradient-to-br from-primary via-primary to-secondary flex items-center justify-center shadow-2xl ring-8 ring-primary/20 relative animate-bounce-slow">
+                <Trophy className="w-14 h-14 text-white drop-shadow-2xl" />
+              </div>
             </div>
           </div>
-          <CardTitle className="text-4xl mb-3 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent font-extrabold" data-testid="text-game-complete">
+          <CardTitle className="text-5xl mb-3 bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent font-extrabold animate-in slide-in-from-bottom duration-700" data-testid="text-game-complete">
             Challenge Complete!
           </CardTitle>
-          <CardDescription className="text-lg">Amazing work! Here's your breakdown</CardDescription>
+          <CardDescription className="text-lg">Here's your detailed performance breakdown</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-8 relative">
-          {/* Main score */}
-          <div className="text-center p-8 rounded-2xl bg-gradient-to-br from-primary/15 via-primary/10 to-secondary/15 shadow-2xl border-2 border-primary/30 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
-            <p className="text-sm text-muted-foreground mb-3 font-semibold tracking-wide relative z-10">TOTAL POINTS</p>
-            <div className="text-7xl font-extrabold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent mb-3 drop-shadow-2xl animate-pulse relative z-10" data-testid="text-final-score">
-              {totalPoints.toLocaleString()}
+        
+        <CardContent className="space-y-6 relative">
+          {/* Grade and Main Score Section */}
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Performance Grade */}
+            <div className={`text-center p-8 rounded-2xl bg-gradient-to-br ${grade.bg} shadow-2xl border-2 border-primary/30 relative overflow-hidden animate-in zoom-in duration-500`}>
+              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+              <p className="text-sm text-muted-foreground mb-3 font-semibold tracking-wide relative z-10">PERFORMANCE GRADE</p>
+              <div className={`text-8xl font-black ${grade.color} mb-3 drop-shadow-2xl relative z-10 font-mono`}>
+                {grade.letter}
+              </div>
+              <Badge className="shadow-xl border-2 border-white/20 relative z-10 text-base px-4 py-1">
+                {accuracy}% Accuracy
+              </Badge>
             </div>
-            <Badge className="shadow-xl border-2 border-white/20 relative z-10">
-              {accuracy}% Accuracy
-            </Badge>
+            
+            {/* Total Points */}
+            <div className="text-center p-8 rounded-2xl bg-gradient-to-br from-primary/15 via-primary/10 to-secondary/15 shadow-2xl border-2 border-primary/30 relative overflow-hidden animate-in zoom-in duration-500 delay-100">
+              <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+              <p className="text-sm text-muted-foreground mb-3 font-semibold tracking-wide relative z-10">TOTAL POINTS EARNED</p>
+              <div className="text-7xl font-extrabold bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent mb-3 drop-shadow-2xl animate-pulse relative z-10" data-testid="text-final-score">
+                {totalPoints.toLocaleString()}
+              </div>
+              <Badge variant="outline" className="shadow-lg border-2 relative z-10">
+                Avg: {avgPointsPerQuestion} pts/question
+              </Badge>
+            </div>
           </div>
 
-          {/* Stats grid */}
-          <div className="grid grid-cols-2 gap-5">
-            <div className="p-6 rounded-xl bg-gradient-to-br from-orange-500/15 to-orange-500/5 border-2 border-orange-500/30 text-center hover-elevate transition-all shadow-lg">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Flame className="w-6 h-6 text-orange-500 drop-shadow-lg" />
-                <p className="text-sm text-muted-foreground font-semibold">Best Streak</p>
+          {/* Detailed Stats Grid */}
+          <div className="space-y-4">
+            <h3 className="text-xl font-bold text-center flex items-center justify-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+              Detailed Statistics
+              <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+            </h3>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Correct Answers */}
+              <div className="p-5 rounded-xl bg-gradient-to-br from-green-500/15 to-green-500/5 border-2 border-green-500/30 text-center hover-elevate transition-all shadow-lg animate-in slide-in-from-left duration-500">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Target className="w-5 h-5 text-green-500 drop-shadow-lg" />
+                  <p className="text-xs text-muted-foreground font-semibold">Correct</p>
+                </div>
+                <p className="text-3xl font-extrabold text-green-500 drop-shadow-lg">{score}</p>
+                <p className="text-xs text-muted-foreground mt-1">of {numberOfQuestions}</p>
               </div>
-              <p className="text-4xl font-extrabold text-orange-500 drop-shadow-lg">{maxStreak}</p>
-            </div>
-            <div className="p-6 rounded-xl bg-gradient-to-br from-green-500/15 to-green-500/5 border-2 border-green-500/30 text-center hover-elevate transition-all shadow-lg">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Target className="w-6 h-6 text-green-500 drop-shadow-lg" />
-                <p className="text-sm text-muted-foreground font-semibold">Correct</p>
+              
+              {/* Incorrect Answers */}
+              <div className="p-5 rounded-xl bg-gradient-to-br from-red-500/15 to-red-500/5 border-2 border-red-500/30 text-center hover-elevate transition-all shadow-lg animate-in slide-in-from-left duration-500 delay-75">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <X className="w-5 h-5 text-red-500 drop-shadow-lg" />
+                  <p className="text-xs text-muted-foreground font-semibold">Incorrect</p>
+                </div>
+                <p className="text-3xl font-extrabold text-red-500 drop-shadow-lg">{incorrectAnswers}</p>
+                <p className="text-xs text-muted-foreground mt-1">mistakes</p>
               </div>
-              <p className="text-4xl font-extrabold text-green-500 drop-shadow-lg">{score}/{numberOfQuestions}</p>
+              
+              {/* Best Streak */}
+              <div className="p-5 rounded-xl bg-gradient-to-br from-orange-500/15 to-orange-500/5 border-2 border-orange-500/30 text-center hover-elevate transition-all shadow-lg animate-in slide-in-from-right duration-500 delay-150">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Flame className="w-5 h-5 text-orange-500 drop-shadow-lg" />
+                  <p className="text-xs text-muted-foreground font-semibold">Best Streak</p>
+                </div>
+                <p className="text-3xl font-extrabold text-orange-500 drop-shadow-lg">{maxStreak}</p>
+                <p className="text-xs text-muted-foreground mt-1">in a row</p>
+              </div>
+              
+              {/* Perfect Streak */}
+              <div className="p-5 rounded-xl bg-gradient-to-br from-purple-500/15 to-purple-500/5 border-2 border-purple-500/30 text-center hover-elevate transition-all shadow-lg animate-in slide-in-from-right duration-500 delay-200">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Star className="w-5 h-5 text-purple-500 drop-shadow-lg" />
+                  <p className="text-xs text-muted-foreground font-semibold">Final Streak</p>
+                </div>
+                <p className="text-3xl font-extrabold text-purple-500 drop-shadow-lg">{streak}</p>
+                <p className="text-xs text-muted-foreground mt-1">at finish</p>
+              </div>
             </div>
-            <div className="p-6 rounded-xl bg-gradient-to-br from-blue-500/15 to-blue-500/5 border-2 border-blue-500/30 text-center hover-elevate transition-all shadow-lg">
+          </div>
+
+          {/* Time Stats */}
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="p-5 rounded-xl bg-gradient-to-br from-blue-500/15 to-blue-500/5 border-2 border-blue-500/30 text-center hover-elevate transition-all shadow-lg animate-in slide-in-from-bottom duration-500">
               <div className="flex items-center justify-center gap-2 mb-2">
-                <Clock className="w-6 h-6 text-blue-500 drop-shadow-lg" />
+                <Clock className="w-5 h-5 text-blue-500 drop-shadow-lg" />
                 <p className="text-sm text-muted-foreground font-semibold">Total Time</p>
               </div>
               <p className="text-3xl font-extrabold text-blue-500 drop-shadow-lg">{formatTime(timeElapsed)}</p>
             </div>
-            <div className="p-6 rounded-xl bg-gradient-to-br from-yellow-500/15 to-yellow-500/5 border-2 border-yellow-500/30 text-center hover-elevate transition-all shadow-lg">
+            
+            <div className="p-5 rounded-xl bg-gradient-to-br from-cyan-500/15 to-cyan-500/5 border-2 border-cyan-500/30 text-center hover-elevate transition-all shadow-lg animate-in slide-in-from-bottom duration-500 delay-75">
               <div className="flex items-center justify-center gap-2 mb-2">
-                <Zap className="w-6 h-6 text-yellow-500 drop-shadow-lg" />
-                <p className="text-sm text-muted-foreground font-semibold">Avg Speed</p>
+                <Zap className="w-5 h-5 text-cyan-500 drop-shadow-lg" />
+                <p className="text-sm text-muted-foreground font-semibold">Avg per Question</p>
               </div>
-              <p className="text-3xl font-extrabold text-yellow-500 drop-shadow-lg">{avgSpeed}</p>
+              <p className="text-3xl font-extrabold text-cyan-500 drop-shadow-lg">{timePerQuestion}s</p>
             </div>
-          </div>
-
-          {/* Performance message */}
-          <div className="text-center p-6 rounded-xl bg-gradient-to-r from-primary/15 to-secondary/15 border-2 border-primary/30 shadow-lg">
-            <div className="flex items-center justify-center gap-3">
-              {accuracy === 100 ? <Trophy className="w-6 h-6 text-yellow-500" /> :
-               accuracy >= 90 ? <Star className="w-6 h-6 text-yellow-500" /> :
-               accuracy >= 75 ? <Target className="w-6 h-6 text-green-500" /> :
-               accuracy >= 60 ? <Sparkles className="w-6 h-6 text-blue-500" /> :
-               <Zap className="w-6 h-6 text-orange-500" />}
-              <p className="font-bold text-xl bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                {accuracy === 100 ? "Perfect Score! You're a math genius!" :
-                 accuracy >= 90 ? "Excellent! Almost perfect!" :
-                 accuracy >= 75 ? "Great job! Keep it up!" :
-                 accuracy >= 60 ? "Good effort! Practice makes perfect!" :
-                 "Keep practicing! You'll get there!"}
+            
+            <div className="p-5 rounded-xl bg-gradient-to-br from-yellow-500/15 to-yellow-500/5 border-2 border-yellow-500/30 text-center hover-elevate transition-all shadow-lg animate-in slide-in-from-bottom duration-500 delay-150">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Zap className="w-5 h-5 text-yellow-500 drop-shadow-lg" />
+                <p className="text-sm text-muted-foreground font-semibold">Speed Rating</p>
+              </div>
+              <p className="text-3xl font-extrabold text-yellow-500 drop-shadow-lg">
+                {timePerQuestion < 5 ? "⚡" : timePerQuestion < 8 ? "🔥" : timePerQuestion < 12 ? "✨" : "🐢"}
               </p>
             </div>
           </div>
 
+          {/* Performance Message */}
+          <div className="text-center p-6 rounded-xl bg-gradient-to-r from-primary/15 to-secondary/15 border-2 border-primary/30 shadow-lg animate-in zoom-in duration-500 delay-300">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              {accuracy === 100 ? <Trophy className="w-8 h-8 text-yellow-500 animate-bounce" /> :
+               accuracy >= 90 ? <Star className="w-8 h-8 text-yellow-500 animate-pulse" /> :
+               accuracy >= 75 ? <Target className="w-8 h-8 text-green-500 animate-pulse" /> :
+               accuracy >= 60 ? <Sparkles className="w-8 h-8 text-blue-500 animate-pulse" /> :
+               <Zap className="w-8 h-8 text-orange-500 animate-pulse" />}
+            </div>
+            <p className="font-bold text-2xl bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-2">
+              {accuracy === 100 ? "🎉 PERFECT SCORE! 🎉" :
+               accuracy >= 90 ? "⭐ Excellent Work!" :
+               accuracy >= 75 ? "🎯 Great Job!" :
+               accuracy >= 60 ? "✨ Good Effort!" :
+               "💪 Keep Practicing!"}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {accuracy === 100 ? "You're a math genius! Flawless performance!" :
+               accuracy >= 90 ? "Almost perfect! You're on fire!" :
+               accuracy >= 75 ? "Solid performance! Keep it up!" :
+               accuracy >= 60 ? "You're making progress!" :
+               "Practice makes perfect! Try again!"}
+            </p>
+          </div>
+
           <Button 
             onClick={onExit} 
-            className="w-full text-lg shadow-2xl bg-gradient-to-r from-primary to-secondary transition-all font-bold" 
+            className="w-full text-lg shadow-2xl bg-gradient-to-r from-primary to-secondary hover:scale-105 transition-all font-bold animate-in slide-in-from-bottom duration-500 delay-500" 
             data-testid="button-exit"
             size="lg"
           >
@@ -625,6 +734,32 @@ export function MathChallengeGame({
         }
         .animate-shake {
           animation: shake 0.5s;
+        }
+        
+        @keyframes float {
+          0% { 
+            transform: translateY(0) rotate(0deg);
+            opacity: 1;
+          }
+          100% { 
+            transform: translateY(100vh) rotate(360deg);
+            opacity: 0;
+          }
+        }
+        .animate-float {
+          animation: float linear infinite;
+        }
+        
+        @keyframes bounce-slow {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+        .animate-bounce-slow {
+          animation: bounce-slow 2s ease-in-out infinite;
         }
       `}</style>
     </div>
