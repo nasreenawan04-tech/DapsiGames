@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -68,6 +68,45 @@ export function MathChallengeGame({
   const [pulseAnimation, setPulseAnimation] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const autoAdvanceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Refs for frequently changing values to avoid recreating effects
+  const totalPointsRef = useRef(totalPoints);
+  const timeElapsedRef = useRef(timeElapsed);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    totalPointsRef.current = totalPoints;
+  }, [totalPoints]);
+  
+  useEffect(() => {
+    timeElapsedRef.current = timeElapsed;
+  }, [timeElapsed]);
+
+  // Memoized handlers to prevent effect recreation
+  const handleFinishGame = useCallback(() => {
+    setIsFinished(prev => {
+      if (prev) return prev;
+      onComplete(totalPointsRef.current, timeElapsedRef.current);
+      return true;
+    });
+  }, [onComplete]);
+
+  const handleNext = useCallback(() => {
+    if (currentProblem < problems.length - 1) {
+      setCurrentProblem(prev => prev + 1);
+      setUserAnswer("");
+      setShowResult(false);
+      setIsCorrect(false);
+      setProblemStartTime(Date.now());
+      
+      // Focus input for next question
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+    } else {
+      handleFinishGame();
+    }
+  }, [currentProblem, problems.length, handleFinishGame]);
 
   useEffect(() => {
     generateProblems();
@@ -91,25 +130,25 @@ export function MathChallengeGame({
 
   // Auto-advance to next question after showing result
   useEffect(() => {
-    if (showResult) {
-      // Clear any existing timeout
+    if (!showResult) return;
+    
+    // Clear any existing timeout
+    if (autoAdvanceTimeoutRef.current) {
+      clearTimeout(autoAdvanceTimeoutRef.current);
+    }
+    
+    // Auto-advance after 1.2 seconds for correct, 2 seconds for incorrect
+    const delay = isCorrect ? 1200 : 2000;
+    autoAdvanceTimeoutRef.current = setTimeout(() => {
+      handleNext();
+    }, delay);
+
+    return () => {
       if (autoAdvanceTimeoutRef.current) {
         clearTimeout(autoAdvanceTimeoutRef.current);
       }
-      
-      // Auto-advance after 1.2 seconds for correct, 2 seconds for incorrect
-      const delay = isCorrect ? 1200 : 2000;
-      autoAdvanceTimeoutRef.current = setTimeout(() => {
-        handleNext();
-      }, delay);
-
-      return () => {
-        if (autoAdvanceTimeoutRef.current) {
-          clearTimeout(autoAdvanceTimeoutRef.current);
-        }
-      };
-    }
-  }, [showResult, isCorrect, currentProblem]);
+    };
+  }, [showResult, isCorrect, handleNext]);
 
   // Particle animation
   useEffect(() => {
@@ -280,29 +319,6 @@ export function MathChallengeGame({
       setComboMultiplier(1);
       setPerfectStreak(0);
     }
-  };
-
-  const handleNext = () => {
-    if (currentProblem < problems.length - 1) {
-      setCurrentProblem(prev => prev + 1);
-      setUserAnswer("");
-      setShowResult(false);
-      setIsCorrect(false);
-      setProblemStartTime(Date.now());
-      
-      // Focus input for next question
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 50);
-    } else {
-      handleFinishGame();
-    }
-  };
-
-  const handleFinishGame = () => {
-    if (isFinished) return;
-    setIsFinished(true);
-    onComplete(totalPoints, timeElapsed);
   };
 
   const formatTime = (seconds: number) => {
