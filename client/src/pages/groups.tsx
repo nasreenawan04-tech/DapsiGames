@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Users, Plus, Lock, Globe, TrendingUp, Trophy, Calendar, Target, UserPlus, LogOut, Crown, Search, Loader2, Award } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Users, Plus, Lock, Globe, TrendingUp, Trophy, Calendar, Target, UserPlus, LogOut, Crown, Search, Loader2, Award, MessageCircle, Send } from "lucide-react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/lib/auth";
-import { useGroups, useUserGroups, useGroup, useGroupMembers, useGroupLeaderboard, useGroupActivities, useCreateGroup, useJoinGroup, useLeaveGroup } from "@/lib/api-hooks";
+import { useGroups, useUserGroups, useGroup, useGroupMembers, useGroupLeaderboard, useGroupActivities, useCreateGroup, useJoinGroup, useLeaveGroup, useGroupMessages, useSendGroupMessage } from "@/lib/api-hooks";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -46,6 +46,11 @@ export default function Groups() {
   const groupMembers = useGroupMembers(selectedGroupId);
   const groupLeaderboard = useGroupLeaderboard(selectedGroupId);
   const groupActivities = useGroupActivities(selectedGroupId);
+  const groupMessages = useGroupMessages(selectedGroupId);
+  const sendMessage = useSendGroupMessage();
+
+  const [newMessage, setNewMessage] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const handleCreateGroup = async () => {
     if (!user) return;
@@ -119,6 +124,30 @@ export default function Groups() {
       });
     }
   };
+
+  const handleSendMessage = async () => {
+    if (!user || !selectedGroupId || !newMessage.trim()) return;
+
+    try {
+      await sendMessage.mutateAsync({
+        groupId: selectedGroupId,
+        userId: user.id,
+        message: newMessage.trim(),
+      });
+      setNewMessage("");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send message",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Auto-scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [groupMessages.data]);
 
   const filteredGroups = allGroups.filter(group =>
     group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -227,7 +256,7 @@ export default function Groups() {
           </Card>
 
           <Tabs defaultValue="leaderboard" className="space-y-6">
-            <TabsList className="grid w-full max-w-2xl grid-cols-3">
+            <TabsList className="grid w-full max-w-3xl grid-cols-4">
               <TabsTrigger value="leaderboard" data-testid="tab-group-leaderboard">
                 <TrendingUp className="h-4 w-4 mr-2" />
                 Leaderboard
@@ -235,6 +264,10 @@ export default function Groups() {
               <TabsTrigger value="members" data-testid="tab-group-members">
                 <Users className="h-4 w-4 mr-2" />
                 Members
+              </TabsTrigger>
+              <TabsTrigger value="chat" data-testid="tab-group-chat" disabled={!isMember}>
+                <MessageCircle className="h-4 w-4 mr-2" />
+                Chat
               </TabsTrigger>
               <TabsTrigger value="activity" data-testid="tab-group-activity">
                 <Calendar className="h-4 w-4 mr-2" />
@@ -328,6 +361,97 @@ export default function Groups() {
                         </CardContent>
                       </Card>
                     ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="chat" className="space-y-4">
+              <Card className="h-[600px] flex flex-col">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageCircle className="h-5 w-5" />
+                    Group Chat
+                  </CardTitle>
+                  <CardDescription>Chat with group members</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1 overflow-hidden flex flex-col p-0">
+                  <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                    {!groupMessages.data || groupMessages.data.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
+                        <MessageCircle className="h-12 w-12 mb-3 opacity-50" />
+                        <p className="font-medium">No messages yet</p>
+                        <p className="text-sm">Start the conversation!</p>
+                      </div>
+                    ) : (
+                      <>
+                        {groupMessages.data.map((msg: any) => {
+                          const isOwnMessage = msg.userId === user?.id;
+                          return (
+                            <div
+                              key={msg.id}
+                              className={cn(
+                                "flex gap-3",
+                                isOwnMessage && "flex-row-reverse"
+                              )}
+                              data-testid={`message-${msg.id}`}
+                            >
+                              <Avatar className="h-8 w-8 flex-shrink-0">
+                                <AvatarImage src={msg.avatarUrl || undefined} />
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                  {msg.fullName.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className={cn("flex flex-col gap-1 max-w-[70%]", isOwnMessage && "items-end")}>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium">
+                                    {isOwnMessage ? "You" : msg.fullName}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {format(new Date(msg.createdAt), "h:mm a")}
+                                  </span>
+                                </div>
+                                <div
+                                  className={cn(
+                                    "rounded-lg px-4 py-2",
+                                    isOwnMessage
+                                      ? "bg-primary text-primary-foreground"
+                                      : "bg-muted"
+                                  )}
+                                >
+                                  <p className="text-sm break-words">{msg.message}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div ref={messagesEndRef} />
+                      </>
+                    )}
+                  </div>
+                  <div className="border-t p-4">
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Type a message..."
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage();
+                          }
+                        }}
+                        disabled={sendMessage.isPending}
+                        data-testid="input-chat-message"
+                      />
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={!newMessage.trim() || sendMessage.isPending}
+                        data-testid="button-send-message"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
