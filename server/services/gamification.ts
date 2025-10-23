@@ -29,25 +29,6 @@ const XP_PER_STUDY_MINUTE = 2; // 2 XP per minute of study
 const XP_PER_TASK_COMPLETED = 10; // Base XP for task completion
 const EARLY_COMPLETION_BONUS_MULTIPLIER = 1.5; // 50% bonus for early completion
 const COINS_PER_LEVEL = 100; // Coins awarded per level up
-
-/**
- * Helper function to award badges by requirement
- */
-async function awardBadgeByRequirement(userId: string, requirement: string): Promise<Badge | null> {
-  if (!db) return null;
-  
-  const [badge] = await db.select().from(badges).where(eq(badges.requirement, requirement)).limit(1);
-  if (!badge) return null;
-
-  const existingBadge = await db.select().from(userBadges)
-    .where(and(eq(userBadges.userId, userId), eq(userBadges.badgeId, badge.id)))
-    .limit(1);
-
-  if (existingBadge.length > 0) return null;
-
-  await db.insert(userBadges).values({ userId, badgeId: badge.id });
-  return badge;
-}
 const STREAK_MILESTONE_COINS = [50, 100, 200, 500]; // Coins for 7, 14, 30, 100 day streaks
 
 /**
@@ -477,14 +458,8 @@ export async function checkAndAwardAchievements(userId: string): Promise<Badge[]
  * Initialize level progression system with default levels
  */
 export async function initializeLevels(): Promise<void> {
-  if (!db) {
-    console.log("Skipping levels initialization - database not available");
-    return;
-  }
-  
-  try {
-    const existingLevels = await db.select().from(levels).limit(1);
-    if (existingLevels.length > 0) return; // Already initialized
+  const existingLevels = await db.select().from(levels).limit(1);
+  if (existingLevels.length > 0) return; // Already initialized
 
   const levelDefinitions = [
     { levelNumber: 1, xpRequired: 0, title: "Novice", rewards: JSON.stringify({ coins: 0 }) },
@@ -500,24 +475,14 @@ export async function initializeLevels(): Promise<void> {
   ];
 
   await db.insert(levels).values(levelDefinitions);
-    console.log("✓ Levels initialized successfully");
-  } catch (error: any) {
-    console.error("Failed to initialize levels:", error.message);
-  }
 }
 
 /**
  * Initialize badge definitions
  */
 export async function initializeBadges(): Promise<void> {
-  if (!db) {
-    console.log("Skipping badges initialization - database not available");
-    return;
-  }
-  
-  try {
-    const existingBadges = await db.select().from(badges).limit(1);
-    if (existingBadges.length > 0) return; // Already initialized
+  const existingBadges = await db.select().from(badges).limit(1);
+  if (existingBadges.length > 0) return; // Already initialized
 
   const badgeDefinitions = [
     {
@@ -600,10 +565,6 @@ export async function initializeBadges(): Promise<void> {
   ];
 
   await db.insert(badges).values(badgeDefinitions);
-    console.log("✓ Badges initialized successfully");
-  } catch (error: any) {
-    console.error("Failed to initialize badges:", error.message);
-  }
 }
 
 // Broadcast points earned to connected WebSocket clients
