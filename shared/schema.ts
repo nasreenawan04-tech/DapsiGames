@@ -295,3 +295,82 @@ export const insertUserBadgeSchema = createInsertSchema(userBadges).omit({
 
 export type InsertUserBadge = z.infer<typeof insertUserBadgeSchema>;
 export type UserBadge = typeof userBadges.$inferSelect;
+
+// Friendships table - tracks friend connections between users
+export const friendships = pgTable("friendships", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  friendId: varchar("friend_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default('pending'), // 'pending', 'accepted', 'rejected'
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertFriendshipSchema = createInsertSchema(friendships).omit({
+  id: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertFriendship = z.infer<typeof insertFriendshipSchema>;
+export type Friendship = typeof friendships.$inferSelect;
+
+// Groups table - defines study groups
+export const groups = pgTable("groups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  ownerId: varchar("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  avatarUrl: text("avatar_url"),
+  isPublic: boolean("is_public").notNull().default(true), // public groups can be discovered and joined
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertGroupSchema = createInsertSchema(groups).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertGroup = z.infer<typeof insertGroupSchema>;
+export type Group = typeof groups.$inferSelect;
+
+// Group Members table - tracks which users belong to which groups
+export const groupMembers = pgTable("group_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupId: varchar("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull().default('member'), // 'owner', 'admin', 'member'
+  joinedAt: timestamp("joined_at").notNull().defaultNow(),
+});
+
+export const insertGroupMemberSchema = createInsertSchema(groupMembers).omit({
+  id: true,
+  joinedAt: true,
+});
+
+export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
+export type GroupMember = typeof groupMembers.$inferSelect;
+
+// Group Challenges table - tracks challenges and competitions within groups
+export const groupChallenges = pgTable("group_challenges", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupId: varchar("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  challengeType: text("challenge_type").notNull(), // 'points', 'study_sessions', 'games_completed'
+  targetValue: integer("target_value").notNull(), // e.g., 1000 points, 10 sessions
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertGroupChallengeSchema = createInsertSchema(groupChallenges).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertGroupChallenge = z.infer<typeof insertGroupChallengeSchema>;
+export type GroupChallenge = typeof groupChallenges.$inferSelect;
