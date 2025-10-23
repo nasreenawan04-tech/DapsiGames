@@ -24,6 +24,7 @@ export default function GamePlay() {
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
   const [pointsEarned, setPointsEarned] = useState(0);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>("easy");
 
   // Temporary inline questions - these should eventually be in the database
   const gameQuestions: Record<string, any> = {
@@ -217,11 +218,23 @@ export default function GamePlay() {
     setGameState("intro");
   };
 
-  // Determine difficulty based on game difficulty
-  const getDifficultyLevel = (): Difficulty => {
-    if (game.difficulty === "Medium") return "medium";
-    if (game.difficulty === "Hard") return "hard";
-    return "easy";
+  // Use selected difficulty for math challenge
+  const getNumberOfQuestions = () => {
+    switch (selectedDifficulty) {
+      case "easy": return 10;
+      case "medium": return 15;
+      case "hard": return 20;
+      default: return 10;
+    }
+  };
+
+  const getTimeLimit = () => {
+    switch (selectedDifficulty) {
+      case "easy": return 90;
+      case "medium": return 120;
+      case "hard": return 150;
+      default: return 90;
+    }
   };
 
   return (
@@ -231,9 +244,9 @@ export default function GamePlay() {
           {/* Render Math Challenge Game for math-quiz */}
           {gameId === "math-quiz" && gameState === "playing" && (
             <MathChallengeGame
-              difficulty={getDifficultyLevel()}
-              numberOfQuestions={10}
-              timeLimit={60}
+              difficulty={selectedDifficulty}
+              numberOfQuestions={getNumberOfQuestions()}
+              timeLimit={getTimeLimit()}
               onComplete={handleMathChallengeComplete}
               onExit={handleMathChallengeExit}
             />
@@ -256,28 +269,92 @@ export default function GamePlay() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div className="p-4 rounded-lg bg-muted/30">
-                    <p className="text-2xl font-bold text-primary">{game.questions.length}</p>
-                    <p className="text-sm text-muted-foreground">Questions</p>
+                {/* Difficulty selection for Math Blitz */}
+                {gameId === "math-quiz" && (
+                  <div className="space-y-4">
+                    <div className="text-center">
+                      <h3 className="font-semibold text-lg mb-3">Choose Your Challenge</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        <Button
+                          variant={selectedDifficulty === "easy" ? "default" : "outline"}
+                          onClick={() => setSelectedDifficulty("easy")}
+                          className="h-auto py-4 flex flex-col items-center gap-2"
+                          data-testid="button-difficulty-easy"
+                        >
+                          <span className="text-2xl">🌱</span>
+                          <div>
+                            <div className="font-bold">Easy</div>
+                            <div className="text-xs opacity-75">10 problems</div>
+                            <div className="text-xs opacity-75">90 seconds</div>
+                          </div>
+                        </Button>
+                        <Button
+                          variant={selectedDifficulty === "medium" ? "default" : "outline"}
+                          onClick={() => setSelectedDifficulty("medium")}
+                          className="h-auto py-4 flex flex-col items-center gap-2"
+                          data-testid="button-difficulty-medium"
+                        >
+                          <span className="text-2xl">🔥</span>
+                          <div>
+                            <div className="font-bold">Medium</div>
+                            <div className="text-xs opacity-75">15 problems</div>
+                            <div className="text-xs opacity-75">120 seconds</div>
+                          </div>
+                        </Button>
+                        <Button
+                          variant={selectedDifficulty === "hard" ? "default" : "outline"}
+                          onClick={() => setSelectedDifficulty("hard")}
+                          className="h-auto py-4 flex flex-col items-center gap-2"
+                          data-testid="button-difficulty-hard"
+                        >
+                          <span className="text-2xl">⚡</span>
+                          <div>
+                            <div className="font-bold">Hard</div>
+                            <div className="text-xs opacity-75">20 problems</div>
+                            <div className="text-xs opacity-75">150 seconds</div>
+                          </div>
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-4 rounded-lg bg-muted/30">
-                    <p className="text-2xl font-bold text-secondary">30s</p>
-                    <p className="text-sm text-muted-foreground">Per Question</p>
+                )}
+
+                {/* Standard game stats for non-math games */}
+                {gameId !== "math-quiz" && (
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div className="p-4 rounded-lg bg-muted/30">
+                      <p className="text-2xl font-bold text-primary">{game.questions.length}</p>
+                      <p className="text-sm text-muted-foreground">Questions</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-muted/30">
+                      <p className="text-2xl font-bold text-secondary">30s</p>
+                      <p className="text-sm text-muted-foreground">Per Question</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-muted/30">
+                      <p className="text-2xl font-bold text-accent">+{game.pointsReward}</p>
+                      <p className="text-sm text-muted-foreground">Max Points</p>
+                    </div>
                   </div>
-                  <div className="p-4 rounded-lg bg-muted/30">
-                    <p className="text-2xl font-bold text-accent">+{game.pointsReward}</p>
-                    <p className="text-sm text-muted-foreground">Max Points</p>
-                  </div>
-                </div>
+                )}
 
                 <div className="space-y-3 p-4 rounded-lg bg-muted/30">
                   <h3 className="font-semibold">How to Play:</h3>
                   <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li>• Answer each question within the time limit</li>
-                    <li>• Faster answers earn more points</li>
-                    <li>• Wrong answers don't deduct points</li>
-                    <li>• Complete all questions to finish the game</li>
+                    {gameId === "math-quiz" ? (
+                      <>
+                        <li>• Solve arithmetic problems as fast as you can</li>
+                        <li>• Build streaks for bonus points</li>
+                        <li>• Speed matters - quick answers earn more</li>
+                        <li>• Watch out for the timer!</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>• Answer each question within the time limit</li>
+                        <li>• Faster answers earn more points</li>
+                        <li>• Wrong answers don't deduct points</li>
+                        <li>• Complete all questions to finish the game</li>
+                      </>
+                    )}
                   </ul>
                 </div>
 
