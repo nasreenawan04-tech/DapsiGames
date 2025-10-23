@@ -73,7 +73,7 @@ export default function Planner() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", user?.id] });
       resetTaskForm();
       setIsAddTaskOpen(false);
     },
@@ -89,7 +89,7 @@ export default function Planner() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", user?.id] });
     },
   });
 

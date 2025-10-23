@@ -1944,8 +1944,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== PHASE 6: Gamification Backend & Advanced Features =====
   
   // Initialize levels and badges on server start
-  initializeLevels().catch(console.error);
-  initializeBadges().catch(console.error);
+  initializeLevels().catch((error) => {
+    console.error("Failed to initialize levels:", error.message);
+  });
+  initializeBadges().catch((error) => {
+    console.error("Failed to initialize badges:", error.message);
+  });
   
   // ==== XP & Level System Routes ====
   
