@@ -88,32 +88,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertUserSchema.parse(req.body);
       
-      const existingUser = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, validatedData.email))
-        .limit(1);
+      const existingUser = await storage.getUserByEmail(validatedData.email);
 
-      if (existingUser.length > 0) {
+      if (existingUser) {
         return res.status(400).json({ error: "Email already registered" });
       }
 
       const hashedPassword = await bcrypt.hash(validatedData.password, SALT_ROUNDS);
 
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          ...validatedData,
-          password: hashedPassword,
-        })
-        .returning();
-
-      // Automatically create user stats for new user
-      await db
-        .insert(userStats)
-        .values({
-          userId: newUser.id,
-        });
+      const newUser = await storage.createUser({
+        ...validatedData,
+        password: hashedPassword,
+      });
 
       const { password, ...userWithoutPassword } = newUser;
       res.json(userWithoutPassword);
@@ -131,11 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Email and password required" });
       }
 
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, email))
-        .limit(1);
+      const user = await storage.getUserByEmail(email);
 
       if (!user) {
         return res.status(401).json({ error: "Invalid credentials" });
