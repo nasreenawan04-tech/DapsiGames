@@ -98,6 +98,75 @@ export class MemStorage implements IStorage {
     this.gameScores = new Map();
     this.bookmarks = new Map();
     this.userProgress = new Map();
+    
+    this.seedInitialData();
+  }
+  
+  private seedInitialData(): void {
+    const sampleGames: Game[] = [
+      {
+        id: randomUUID(),
+        title: 'Math Blitz',
+        description: 'Test your arithmetic skills with rapid-fire math problems. Answer as many as you can before time runs out!',
+        difficulty: 'Easy',
+        pointsReward: 10,
+        category: 'Mathematics',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1509228627152-72ae9ae6848d?w=400',
+        instructions: 'Solve math problems as quickly as possible. Each correct answer earns you points. You have 60 seconds!'
+      },
+      {
+        id: randomUUID(),
+        title: 'Word Scramble',
+        description: 'Unscramble letters to form valid words. Perfect for improving vocabulary and spelling.',
+        difficulty: 'Easy',
+        pointsReward: 15,
+        category: 'Language',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?w=400',
+        instructions: 'Rearrange the scrambled letters to form a valid word. Hint: words are related to common topics.'
+      },
+      {
+        id: randomUUID(),
+        title: 'Chemistry Quiz',
+        description: 'Challenge your knowledge of the periodic table, chemical reactions, and molecular structures.',
+        difficulty: 'Medium',
+        pointsReward: 20,
+        category: 'Science',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=400',
+        instructions: 'Answer multiple choice questions about chemistry concepts. Each correct answer adds to your score!'
+      },
+      {
+        id: randomUUID(),
+        title: 'Geography Challenge',
+        description: 'Test your knowledge of world capitals, countries, and landmarks.',
+        difficulty: 'Medium',
+        pointsReward: 25,
+        category: 'Geography',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=400',
+        instructions: 'Identify countries, capitals, and geographical features. Explore the world from your screen!'
+      },
+      {
+        id: randomUUID(),
+        title: 'Code Breaker',
+        description: 'Solve programming logic puzzles and algorithm challenges.',
+        difficulty: 'Hard',
+        pointsReward: 30,
+        category: 'Computer Science',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=400',
+        instructions: 'Analyze code snippets and determine the output or fix bugs. Test your programming knowledge!'
+      },
+      {
+        id: randomUUID(),
+        title: 'History Timeline',
+        description: 'Arrange historical events in chronological order to test your knowledge of world history.',
+        difficulty: 'Medium',
+        pointsReward: 20,
+        category: 'History',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1461360370896-922624d12aa1?w=400',
+        instructions: 'Drag and drop events to place them in the correct chronological order.'
+      }
+    ];
+    
+    sampleGames.forEach(game => this.games.set(game.id, game));
   }
 
   // User methods

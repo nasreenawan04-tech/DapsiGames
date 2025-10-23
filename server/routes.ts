@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "./db";
+import { storage } from "./storage";
 import {
   users,
   userStats,
@@ -313,7 +314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all games (cached for 5 minutes)
   app.get("/api/games", cacheMiddleware(), async (req, res) => {
     try {
-      const allGames = await db.select().from(games);
+      const allGames = await storage.getAllGames();
       res.json(allGames);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -323,11 +324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get single game
   app.get("/api/games/:gameId", async (req, res) => {
     try {
-      const [game] = await db
-        .select()
-        .from(games)
-        .where(eq(games.id, req.params.gameId))
-        .limit(1);
+      const game = await storage.getGame(req.params.gameId);
 
       if (!game) {
         return res.status(404).json({ error: "Game not found" });
