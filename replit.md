@@ -2,101 +2,7 @@
 
 ## Overview
 
-DapsiGames is a web-based educational platform that gamifies the learning experience for students aged 13-25. The platform combines competitive elements like leaderboards, achievements, and point systems with educational content including study materials and interactive games. Students can track their progress, compete with peers globally, and earn badges and rewards as they master new subjects.
-
-The application provides both authenticated and guest access modes, with full features available to registered users and limited preview capabilities for guests exploring the platform.
-
-## Recent Changes
-
-**October 23, 2025 - Math Blitz Game Enhancement - COMPLETED ✅**
-- **Three Difficulty Levels**: Easy (🌱 10 problems/90s), Medium (🔥 15 problems/120s), Hard (⚡ 20 problems/150s)
-- **Input-Based Gameplay**: Players type answers instead of selecting from multiple choice for authentic math challenge
-- **Addictive Mechanics Implementation**:
-  - Streak System: Track consecutive correct answers with real-time counter
-  - Combo Multipliers: 1.5× at 3 streak, 2× at 5 streak, 3× at 10 streak
-  - Speed Bonuses: Lightning Fast badges for answers under 3 seconds
-  - Visual Feedback: Gradient text for scores, animated combo badges, color-coded result cards
-- **Point Calculation System**: Base 100 + speed bonus (0-50) + streak bonus (streak × 10) × combo multiplier
-- **Critical Bug Fix**: Combo multiplier now correctly applies to the streak-triggering answer (calculated before point calculation)
-- **Enhanced UI**: Large input fields, gradient problem display, real-time stats dashboard with score/streak/time/multiplier
-- **Completion Screen**: Detailed performance stats including total points, accuracy, max streak, and speed metrics
-- **Architect Reviewed**: All implementations verified, multiplier timing confirmed correct
-
-**October 22, 2025 - Phase 8: Review, Security, and Final Optimization - COMPLETED ✅**
-- **Security Implementation**: Helmet.js with environment-aware CSP (strict in production), rate limiting (general + auth), input validation middleware on auth routes, health check endpoint
-- **Performance Optimization**: Response caching middleware applied to leaderboard (60s), games/study/achievements (5min); lazy loading with React.Suspense for Dashboard, Leaderboard, Profile, Games, Study, Guest pages
-- **Code Quality**: React ErrorBoundary, comprehensive skeleton loaders, reusable EmptyState component, ESLint and Prettier configuration
-- **Production Deployment**: Environment variable template (.env.example), health monitoring endpoint, comprehensive deployment documentation
-- **Comprehensive Documentation Suite**: 
-  - API_DOCUMENTATION.md: Complete API reference with examples
-  - DEPLOYMENT.md: Production deployment guide
-  - USER_GUIDE.md: End-user documentation
-  - SECURITY_AUDIT.md: Security measures and recommendations
-  - PERFORMANCE_OPTIMIZATION.md: Caching and optimization strategies
-  - TESTING_GUIDE.md: Testing procedures and setup
-  - PHASE_8_COMPLETION_SUMMARY.md: Full Phase 8 summary
-- **Architect Review**: All implementations reviewed and approved with PASS status
-- **Production Ready**: Application is fully prepared for production deployment with security hardening, performance optimization, and operational documentation
-
-**October 22, 2025 - Phase 7: Advanced Features and System Integration Completed**
-- Created comprehensive backend services:
-  - **studyMaterialService.ts**: Content delivery, bookmarking, progress tracking, recommendations, completion rewards
-  - **gameService.ts**: Game state management, high score tracking, completion rewards, point calculation
-  - **achievementService.ts**: Unlocking logic, progress tracking, achievement checking
-  - **analyticsService.ts**: User engagement metrics, learning progress tracking, retention rates, popular content analysis
-- Built three complete educational game components:
-  - **QuizGame**: Multiple choice questions with timer, scoring, explanations, and progress tracking
-  - **WordPuzzleGame**: Vocabulary challenges with scrambled words, hints, and definitions
-  - **MathChallengeGame**: Arithmetic problems with configurable difficulty (easy/medium/hard) and real-time scoring
-- Implemented achievement notification system:
-  - Achievement unlocking with automatic checking after point-earning activities
-  - Toast notifications for newly unlocked achievements
-  - Progress tracking for all achievements
-- Created guest mode restriction system:
-  - **GuestRestriction** component for premium feature gates
-  - **UpgradePrompt** component for conversion optimization
-  - **useGuestRestrictions** hook for feature access control and limits
-- Built comprehensive search functionality:
-  - **SearchBar** component with clear functionality and submit handling
-  - **SearchFilters** component for multi-criteria filtering
-  - Reusable across study materials and games sections
-- Implemented Progressive Web App (PWA) functionality:
-  - Service worker for offline capabilities and caching
-  - PWA manifest with app metadata and icons
-  - Service worker registration with update detection in main.tsx
-  - Mobile-optimized meta tags for app-like experience
-- Real-time features already in place via existing hooks (use-realtime-leaderboard)
-- All services integrated with Supabase database and follow TypeScript best practices
-- Code reviewed and approved by architect with no critical issues
-
-**October 22, 2025 - Phase 4: Study Materials and Gaming Interfaces Completed**
-- Added bookmarks table to database schema with user-study material relationships
-- Implemented bookmark API endpoints (POST/DELETE /api/bookmarks/:userId/:materialId)
-- Enhanced Study Materials page with:
-  - Search functionality across titles and content
-  - Multi-level filtering (subject category, difficulty level)
-  - Tabs for All/Bookmarked/Completed materials
-  - Bookmark toggle with real-time UI updates
-  - Progress tracking with completion status
-- Enhanced Games page with:
-  - API integration loading from database
-  - Search across game titles and descriptions  
-  - Category and difficulty filtering
-  - Interactive game cards with point rewards display
-- Fixed critical bugs:
-  - apiRequest now handles 204 No Content responses without throwing errors
-  - Environment-aware SSL configuration (disabled in dev, enabled in production) for Neon database
-- Database seeded with sample study materials and games for testing
-
-**October 22, 2025 - Phase 3: Dashboard and Profile Management Completed**
-- Enhanced Profile page to use real user data from auth context instead of mock data
-- Integrated achievements display with real backend data using useAchievements hook
-- Integrated activity history with real backend data using useActivities hook  
-- Added PATCH /api/user/:userId/profile endpoint for updating user profiles
-- Implemented useUpdateProfile mutation hook with localStorage and auth context synchronization
-- Created functional edit profile dialog with name editing capability
-- Added comprehensive client and server-side validation
-- Enhanced AuthProvider with user-updated event listener for real-time state sync across components
+DapsiGames is a web-based educational platform designed to gamify learning for students aged 13-25. It integrates competitive elements like leaderboards, achievements, and point systems with educational content and interactive games. Users can track progress, compete globally, and earn rewards. The platform offers both authenticated access with full features and limited guest access for previews. The business vision is to make learning engaging and competitive, leveraging market potential in educational technology and aiming to become a leading gamified learning solution.
 
 ## User Preferences
 
@@ -107,121 +13,123 @@ Preferred communication style: Simple, everyday language.
 ### Frontend Architecture
 
 **Technology Stack:**
-- React with TypeScript for component-based UI development
-- Vite as the build tool and development server
-- Wouter for lightweight client-side routing
-- TanStack Query (React Query) for server state management and caching
-- Tailwind CSS for utility-first styling with shadcn/ui component library
+- React with TypeScript
+- Vite for build and development
+- Wouter for routing
+- TanStack Query for server state management
+- Tailwind CSS with shadcn/ui for styling
 
 **Design System:**
-- Custom design tokens following a gaming + education fusion aesthetic
-- References design patterns from Duolingo (gamification), Discord (leaderboards), Kahoot (competitive UI), and Linear (typography)
-- Comprehensive color system with primary blue (#1e40af), success green (#10b981), and energy orange (#f59e0b)
-- Dark mode support with separate color variables
-- Typography using Inter for headings and system fonts for body text
+- Custom design tokens blending gaming and education aesthetics.
+- Inspired by Duolingo, Discord, Kahoot, and Linear for gamification, leaderboards, competitive UI, and typography.
+- Comprehensive color system (primary blue, success green, energy orange).
+- Dark mode support.
+- Typography: Inter (headings), system fonts (body).
 
 **State Management Strategy:**
-- Authentication state managed through React Context (AuthProvider)
-- User data persisted in localStorage for session management
-- Server state cached and synchronized via TanStack Query
-- Real-time updates triggered through custom events (user-updated event)
+- Authentication via React Context (AuthProvider).
+- User data persisted in localStorage.
+- Server state cached and synchronized by TanStack Query.
+- Real-time updates via custom events.
 
 **Component Organization:**
-- Page components in `client/src/pages/` (home, dashboard, leaderboard, profile, study, games, auth flows)
-- Reusable UI components from shadcn/ui in `client/src/components/ui/`
-- Shared layout components (Header, Footer) in `client/src/components/`
-- Custom hooks in `client/src/hooks/` for mobile detection and toast notifications
+- Pages in `client/src/pages/`.
+- Reusable UI components from shadcn/ui in `client/src/components/ui/`.
+- Shared layout components in `client/src/components/`.
+- Custom hooks in `client/src/hooks/`.
 
 ### Backend Architecture
 
 **Technology Stack:**
-- Express.js server with TypeScript
+- Express.js with TypeScript
 - Drizzle ORM for type-safe database queries
-- Neon serverless PostgreSQL as the database platform
-- WebSocket (ws library) for real-time leaderboard updates
+- Neon serverless PostgreSQL
+- WebSocket (ws library) for real-time updates
 - bcrypt for password hashing
 
 **API Design:**
-- RESTful API endpoints under `/api/` prefix
-- Authentication endpoints: `/api/auth/register`, `/api/auth/login`, `/api/auth/logout`
-- Resource endpoints for users, games, achievements, study materials, activities, and scores
-- Real-time WebSocket endpoint at `/ws` for live leaderboard broadcasts
+- RESTful API endpoints under `/api/`.
+- Authentication, user, games, achievements, study materials, activities, and scores endpoints.
+- Real-time WebSocket at `/ws` for leaderboard broadcasts.
 
 **Database Schema:**
-- **users**: Core user accounts with email, hashed password, full name, points, rank, and avatar
-- **games**: Educational game definitions with title, description, category, difficulty, and points
-- **achievements**: User-earned badges with name, description, icon, and unlock timestamp
-- **studyMaterials**: Educational content organized by title, category, difficulty, and content
-- **userActivities**: Activity log tracking study sessions and game completions with timestamps and points
-- **gameScores**: Individual game performance records linking users, games, scores, and completion times
-- **bookmarks**: User bookmarks for study materials with composite primary key (userId, materialId)
+- **users**: Accounts, points, rank.
+- **games**: Game definitions.
+- **achievements**: User-earned badges.
+- **studyMaterials**: Educational content.
+- **userActivities**: Study and game activity logs.
+- **gameScores**: Game performance records.
+- **bookmarks**: User bookmarks for materials.
 
 **Authentication & Security:**
-- Password-based authentication with bcrypt hashing (10 salt rounds)
-- User sessions stored in localStorage on client side
-- Database credentials secured via environment variables
-- Environment-aware SSL/TLS configuration (development: relaxed, production: strict certificate validation)
-- Row-level security intended for data protection (mentioned in requirements)
+- Password-based auth with bcrypt.
+- Client-side user sessions in localStorage.
+- Environment variables for database credentials.
+- Environment-aware SSL/TLS.
+- Row-level security for data protection.
 
 **Real-Time Features:**
-- WebSocket connection managed separately from HTTP server
-- Broadcasts leaderboard updates to all connected clients when point changes occur
-- Client auto-reconnects with 3-second retry interval on connection loss
-- TanStack Query cache invalidation triggered by WebSocket messages
+- WebSocket for leaderboard updates.
+- Client auto-reconnect with retry logic.
+- TanStack Query cache invalidation via WebSocket messages.
 
 ### Data Storage Solutions
 
 **Database:**
-- PostgreSQL hosted on Neon serverless platform
-- Connection pooling via @neondatabase/serverless
-- WebSocket constructor override for serverless compatibility
-- Database URL required via DATABASE_URL environment variable
+- PostgreSQL on Neon serverless platform.
+- @neondatabase/serverless for connection pooling.
+- Database URL via `DATABASE_URL` environment variable.
 
 **ORM Layer:**
-- Drizzle ORM provides type-safe query building
-- Schema definitions in TypeScript with Zod validation
-- Automatic type inference for inserts and selects
-- Migration files generated in `./migrations` directory
+- Drizzle ORM for type-safe queries.
+- TypeScript schema definitions with Zod validation.
+- Automatic type inference.
 
 **Client-Side Storage:**
-- localStorage for user session persistence
-- Guest mode data stored locally (mentioned in requirements)
-- No cookies used for session management
+- localStorage for user session persistence.
+- Local storage for guest mode data.
 
-### External Dependencies
+### Feature Specifications
+- **Educational Content**: Study materials with search, filtering, bookmarking, and progress tracking.
+- **Interactive Games**: QuizGame, WordPuzzleGame, MathChallengeGame with varying difficulty, real-time scoring, streaks, combos, and speed bonuses.
+- **Gamification**: Leaderboards, achievements, point systems, badges.
+- **User Management**: Authentication, profile management, activity history.
+- **Guest Mode**: Limited access with upgrade prompts.
+- **Search Functionality**: Across study materials and games with multi-criteria filtering.
+- **PWA Capabilities**: Offline support, caching, app-like experience.
+- **Security**: Helmet.js, rate limiting, input validation.
+- **Performance**: Response caching, lazy loading with React.Suspense.
+- **Code Quality**: ErrorBoundary, skeleton loaders, ESLint, Prettier.
+
+## External Dependencies
 
 **UI Component Libraries:**
-- Radix UI primitives for accessible, unstyled components (accordion, alert-dialog, avatar, checkbox, dialog, dropdown-menu, etc.)
-- shadcn/ui configuration for styled component layer
-- cmdk for command palette functionality
-- class-variance-authority for component variant management
+- Radix UI primitives.
+- shadcn/ui.
+- cmdk (command palette).
+- class-variance-authority.
 
 **Data Fetching & State:**
-- @tanstack/react-query for server state synchronization
-- Built-in refetch strategies disabled (manual control preferred)
+- @tanstack/react-query.
 
 **Form Handling:**
-- react-hook-form for form state management
-- @hookform/resolvers with Zod for schema validation
-- Comprehensive validation schemas for auth forms
+- react-hook-form.
+- @hookform/resolvers with Zod.
 
 **Date/Time:**
-- date-fns for date formatting and relative time display
+- date-fns.
 
 **Development Tools:**
-- tsx for TypeScript execution in development
-- esbuild for production server bundling
-- Replit-specific plugins for runtime error overlay, cartographer, and dev banner
+- tsx.
+- esbuild.
+- Replit-specific plugins.
 
 **Build & Tooling:**
-- PostCSS with Tailwind CSS and Autoprefixer
-- Vite plugins for React, runtime error modal, and development features
-- Path aliases configured: `@/` for client source, `@shared/` for shared code, `@assets/` for static assets
+- PostCSS (Tailwind CSS, Autoprefixer).
+- Vite plugins.
 
 **Database Tooling:**
-- drizzle-kit for schema migrations and database push operations
-- @jridgewell/trace-mapping for source map support
+- drizzle-kit.
 
 **Font Loading:**
-- Google Fonts CDN for Inter (weights 400-800) and JetBrains Mono typefaces
-- Preconnect optimization for fonts.googleapis.com and fonts.gstatic.com
+- Google Fonts CDN (Inter, JetBrains Mono).
