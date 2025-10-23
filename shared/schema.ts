@@ -12,6 +12,10 @@ export const users = pgTable("users", {
   points: integer("points").notNull().default(0),
   rank: integer("rank"),
   avatarUrl: text("avatar_url"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  isPro: boolean("is_pro").notNull().default(false),
+  subscriptionStatus: text("subscription_status"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
