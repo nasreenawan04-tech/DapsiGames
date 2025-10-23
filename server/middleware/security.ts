@@ -6,18 +6,12 @@ export function setupSecurityMiddleware(app: Express) {
   const isDevelopment = process.env.NODE_ENV === 'development';
   
   app.use(helmet({
-    contentSecurityPolicy: {
+    contentSecurityPolicy: isDevelopment ? false : {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: isDevelopment 
-          ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
-          : ["'self'"],
-        styleSrc: isDevelopment 
-          ? ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"]
-          : ["'self'", "https://fonts.googleapis.com"],
-        styleSrcElem: isDevelopment 
-          ? ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"]
-          : ["'self'", "https://fonts.googleapis.com"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "https://fonts.googleapis.com"],
+        styleSrcElem: ["'self'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "https:", "blob:"],
         connectSrc: ["'self'", "ws:", "wss:", "https:"],
         fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
@@ -27,6 +21,7 @@ export function setupSecurityMiddleware(app: Express) {
       },
     },
     crossOriginEmbedderPolicy: false,
+    frameguard: isDevelopment ? false : { action: 'sameorigin' },
   }));
 
   const generalLimiter = rateLimit({
