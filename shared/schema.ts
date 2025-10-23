@@ -242,6 +242,9 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   completed: true,
   createdAt: true,
   completedAt: true,
+}).extend({
+  xpReward: z.number().optional(),
+  bonusXp: z.number().optional(),
 });
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;

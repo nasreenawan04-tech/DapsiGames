@@ -1,7 +1,10 @@
 import express, { type Request, Response, NextFunction } from "express";
+import { storage } from "./storage";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupSecurityMiddleware } from "./middleware/security";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 const app = express();
 
@@ -51,7 +54,31 @@ app.use((req, res, next) => {
   next();
 });
 
+async function initializeDatabase() {
+  try {
+    // Enable UUID extension
+    await db.execute(sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+
+    // Check if tables exist, create basic ones if not
+    console.log("Checking database tables...");
+
+    // This will help identify missing tables
+    const result = await db.execute(sql`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+    `);
+
+    console.log("Existing tables:", result.rows.map((r: any) => r.table_name));
+  } catch (error: any) {
+    console.error("Database initialization error:", error.message);
+  }
+}
+
 (async () => {
+  // Initialize database
+  await initializeDatabase();
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

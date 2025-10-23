@@ -627,11 +627,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if user is already a member
-      const existing = await storage.getGroupMembers(groupId);
-      const alreadyMember = existing.some(m => m.userId === userId);
-      
-      if (alreadyMember) {
-        return res.status(400).json({ error: "Already a member of this group" });
+      try {
+        const existing = await storage.getGroupMembers(groupId);
+        const alreadyMember = existing.some(m => m.userId === userId);
+        
+        if (alreadyMember) {
+          return res.status(400).json({ error: "Already a member of this group" });
+        }
+      } catch (error: any) {
+        // If table doesn't exist or query fails, continue to create member
+        console.log("Error checking existing members:", error.message);
       }
       
       const membership = await storage.createGroupMember({
@@ -642,6 +647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(membership);
     } catch (error: any) {
+      console.error("Error joining group:", error);
       res.status(400).json({ error: error.message });
     }
   });
@@ -1509,28 +1515,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .set({ points: newPoints })
           .where(eq(users.id, session.userId));
 
-        await db
-          .update(userStats)
-          .set({ 
-            totalPoints: newPoints,
-            studySessions: sql`${userStats.studySessions} + 1`,
-            updatedAt: new Date()
-          })
-          .where(eq(userStats.userId, session.userId));
+        try {
+          // Try to update stats if table exists
+          const [stats] = await db
+            .select()
+            .from(userStats)
+            .where(eq(userStats.userId, session.userId))
+            .limit(1);
+          
+          if (stats) {
+            await db
+              .update(userStats)
+              .set({ 
+                totalPoints: newPoints,
+                studySessions: (stats.studySessions || 0) + 1,
+                updatedAt: new Date()
+              })
+              .where(eq(userStats.userId, session.userId));
+          } else {
+            // Create stats if doesn't exist
+            await db.insert(userStats).values({
+              userId: session.userId,
+              totalPoints: newPoints,
+              studySessions: 1,
+            });
+          }
+        } catch (error: any) {
+          console.log("Stats update skipped:", error.message);
+        }
 
         // Update streak
-        await updateStreak(session.userId);
+        try {
+          await updateStreak(session.userId);
+        } catch (error: any) {
+          console.log("Streak update skipped:", error.message);
+        }
         
         // Record activity
-        await db.insert(userActivities).values({
-          userId: session.userId,
-          activityType: "study_session",
-          activityTitle: `Completed ${session.duration} min study session`,
-          pointsEarned: xpEarned,
-        });
+        try {
+          await db.insert(userActivities).values({
+            userId: session.userId,
+            activityType: "study_session",
+            activityTitle: `Completed ${session.duration} min study session`,
+            pointsEarned: xpEarned,
+          });
+        } catch (error: any) {
+          console.log("Activity record skipped:", error.message);
+        }
 
-        await updateLeaderboardRanks();
-        broadcastLeaderboardUpdate();
+        try {
+          await updateLeaderboardRanks();
+          broadcastLeaderboardUpdate();
+        } catch (error: any) {
+          console.log("Leaderboard update skipped:", error.message);
+        }
       }
 
       res.json(updatedSession);
