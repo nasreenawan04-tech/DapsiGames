@@ -374,3 +374,20 @@ export const insertGroupChallengeSchema = createInsertSchema(groupChallenges).om
 
 export type InsertGroupChallenge = z.infer<typeof insertGroupChallengeSchema>;
 export type GroupChallenge = typeof groupChallenges.$inferSelect;
+
+// Group Messages table - stores chat messages for groups
+export const groupMessages = pgTable("group_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupId: varchar("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertGroupMessageSchema = createInsertSchema(groupMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertGroupMessage = z.infer<typeof insertGroupMessageSchema>;
+export type GroupMessage = typeof groupMessages.$inferSelect;
