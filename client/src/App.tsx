@@ -29,6 +29,7 @@ import {
   LazyPomodoro,
   LazyTasks,
   LazyGroups,
+  LazyPlanner,
 } from "@/lib/lazy-components";
 import Leaderboard from "@/pages/leaderboard";
 
@@ -64,6 +65,9 @@ function Router() {
             </Route>
             <Route path="/tasks">
               {() => <ProtectedRoute><LazyTasks /></ProtectedRoute>}
+            </Route>
+            <Route path="/planner">
+              {() => <ProtectedRoute><LazyPlanner /></ProtectedRoute>}
             </Route>
             <Route path="/leaderboard" component={Leaderboard} />
             <Route path="/profile">

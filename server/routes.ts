@@ -2144,7 +2144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .innerJoin(users, eq(friendships.friendId, users.id))
         .where(eq(friendships.userId, req.params.userId));
       
-      const friendsData = friendsList.map(({ friendship, friend }) => ({
+      const friendsData = friendsList.map(({ friendship, friend }: any) => ({
         id: friendship.id,
         friendId: friend.id,
         fullName: friend.fullName,
@@ -2253,7 +2253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sql`${friendships.userId} = ${req.params.userId} AND ${friendships.status} = 'accepted'`
         );
       
-      const friendIds = friendsList.map((f) => f.friendId);
+      const friendIds = friendsList.map((f: any) => f.friendId);
       friendIds.push(req.params.userId); // Include current user
       
       if (friendIds.length === 0) {
@@ -2440,7 +2440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(groupMembers)
         .where(eq(groupMembers.groupId, req.params.groupId));
       
-      const memberIds = membersList.map((m) => m.userId);
+      const memberIds = membersList.map((m: any) => m.userId);
       
       if (memberIds.length === 0) {
         return res.json([]);
@@ -2488,7 +2488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(groupMembers)
         .where(eq(groupMembers.groupId, req.params.groupId));
       
-      const memberIds = membersList.map((m) => m.userId);
+      const memberIds = membersList.map((m: any) => m.userId);
       
       // Calculate progress based on challenge type
       let progress: any[] = [];
