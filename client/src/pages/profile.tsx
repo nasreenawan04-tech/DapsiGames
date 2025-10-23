@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User, Award, Trophy, TrendingUp, Calendar, Settings, Camera } from "lucide-react";
+import { User, Award, Trophy, TrendingUp, Calendar, Settings, Camera, Users, UserPlus, Check, X, Search } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
-import { useAchievements, useActivities, useUpdateProfile } from "@/lib/api-hooks";
+import { useAchievements, useActivities, useUpdateProfile, useFriends, useFriendRequests, useSendFriendRequest, useAcceptFriendRequest, useRejectFriendRequest, useRemoveFriend, useSearchUsers } from "@/lib/api-hooks";
 import { formatDistanceToNow, format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -25,13 +25,22 @@ export default function Profile() {
   const { user } = useAuth();
   const { data: achievements = [], isLoading: achievementsLoading } = useAchievements(user?.id);
   const { data: activities = [], isLoading: activitiesLoading } = useActivities(user?.id);
+  const { data: friends = [], isLoading: friendsLoading } = useFriends(user?.id);
+  const { data: friendRequests = [], isLoading: requestsLoading } = useFriendRequests(user?.id);
   const updateProfile = useUpdateProfile();
+  const sendRequest = useSendFriendRequest();
+  const acceptRequest = useAcceptFriendRequest();
+  const rejectRequest = useRejectFriendRequest();
+  const removeFriend = useRemoveFriend();
   const { toast } = useToast();
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [isAddFriendDialogOpen, setIsAddFriendDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const { data: searchResults = [] } = useSearchUsers(searchQuery);
 
   if (!user) {
     return null;
@@ -113,10 +122,73 @@ export default function Profile() {
     }
   };
 
+  const handleAddFriend = async (friendId: string) => {
+    try {
+      await sendRequest.mutateAsync({ userId: user.id, friendId });
+      toast({
+        title: "Friend request sent",
+        description: "Your friend request has been sent successfully.",
+      });
+      setSearchQuery("");
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send friend request",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAcceptRequest = async (friendshipId: string) => {
+    try {
+      await acceptRequest.mutateAsync(friendshipId);
+      toast({
+        title: "Friend request accepted",
+        description: "You are now friends!",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to accept friend request",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRejectRequest = async (friendshipId: string) => {
+    try {
+      await rejectRequest.mutateAsync(friendshipId);
+      toast({
+        title: "Friend request rejected",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reject friend request",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRemoveFriend = async (friendshipId: string) => {
+    try {
+      await removeFriend.mutateAsync(friendshipId);
+      toast({
+        title: "Friend removed",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove friend",
+        variant: "destructive",
+      });
+    }
+  };
+
   const stats = [
-    { label: "Total Points", value: user.points.toLocaleString(), icon: Trophy },
+    { label: "Total Points", value: user.points?.toLocaleString() || "0", icon: Trophy },
     { label: "Global Rank", value: user.rank ? `#${user.rank}` : "Unranked", icon: TrendingUp },
-    { label: "Activities", value: activities.length.toString(), icon: Calendar },
+    { label: "Friends", value: friends.length.toString(), icon: Users },
     { label: "Achievements", value: achievements.length.toString(), icon: Award },
   ];
 
@@ -171,7 +243,7 @@ export default function Profile() {
 
                 <div className="flex items-center gap-2 mb-4">
                   <Badge variant="secondary">
-                    Member since {format(new Date(user.createdAt), "MMM dd, yyyy")}
+                    Member since {format(new Date(), "MMM dd, yyyy")}
                   </Badge>
                   {user.rank && (
                     <Badge className="bg-gradient-to-r from-primary to-secondary text-white">
@@ -199,12 +271,15 @@ export default function Profile() {
         </Card>
 
         <Tabs defaultValue="achievements" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-2xl grid-cols-3">
             <TabsTrigger value="achievements" data-testid="tab-achievements">
               Achievements
             </TabsTrigger>
+            <TabsTrigger value="friends" data-testid="tab-friends">
+              Friends
+            </TabsTrigger>
             <TabsTrigger value="activity" data-testid="tab-activity">
-              Activity History
+              Activity
             </TabsTrigger>
           </TabsList>
 
@@ -247,6 +322,127 @@ export default function Profile() {
                           <Badge variant="secondary" className="w-full justify-center">
                             Unlocked {formatDistanceToNow(new Date(achievement.unlockedAt), { addSuffix: true })}
                           </Badge>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="friends" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Your Friends
+                    </CardTitle>
+                    <CardDescription>
+                      {friends.length} friends
+                    </CardDescription>
+                  </div>
+                  <Button onClick={() => setIsAddFriendDialogOpen(true)} data-testid="button-add-friend">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Add Friend
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {friendRequests.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="font-semibold mb-3 text-sm text-muted-foreground">
+                      Friend Requests ({friendRequests.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {friendRequests.map((request: any) => (
+                        <div
+                          key={request.friendshipId}
+                          className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
+                          data-testid={`friend-request-${request.friendshipId}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar>
+                              <AvatarImage src={request.avatarUrl || undefined} />
+                              <AvatarFallback className="bg-primary/10 text-primary">
+                                {request.fullName.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-semibold">{request.fullName}</p>
+                              <p className="text-sm text-muted-foreground">{request.email}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="icon"
+                              variant="default"
+                              onClick={() => handleAcceptRequest(request.friendshipId)}
+                              data-testid={`button-accept-${request.friendshipId}`}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              onClick={() => handleRejectRequest(request.friendshipId)}
+                              data-testid={`button-reject-${request.friendshipId}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {friendsLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading friends...</div>
+                ) : friends.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No friends yet. Add some friends to start competing!
+                  </div>
+                ) : (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {friends.map((friend: any) => (
+                      <Card
+                        key={friend.friendshipId}
+                        className="hover-elevate"
+                        data-testid={`friend-card-${friend.friendshipId}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Avatar>
+                                <AvatarImage src={friend.avatarUrl || undefined} />
+                                <AvatarFallback className="bg-primary/10 text-primary">
+                                  {friend.fullName.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-semibold">{friend.fullName}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {friend.points.toLocaleString()} points
+                                </p>
+                                {friend.rank && (
+                                  <Badge variant="secondary" className="text-xs mt-1">
+                                    Rank #{friend.rank}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRemoveFriend(friend.friendshipId)}
+                              data-testid={`button-remove-${friend.friendshipId}`}
+                            >
+                              Remove
+                            </Button>
+                          </div>
                         </CardContent>
                       </Card>
                     ))}
@@ -390,6 +586,81 @@ export default function Profile() {
               data-testid="button-save-avatar"
             >
               {updateProfile.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddFriendDialogOpen} onOpenChange={setIsAddFriendDialogOpen}>
+        <DialogContent data-testid="dialog-add-friend">
+          <DialogHeader>
+            <DialogTitle>Add Friend</DialogTitle>
+            <DialogDescription>
+              Search for users by name or email to send a friend request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search users..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-users"
+              />
+            </div>
+            
+            {searchQuery && (
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {searchResults.length === 0 ? (
+                  <p className="text-center py-4 text-muted-foreground">No users found</p>
+                ) : (
+                  searchResults
+                    .filter((result: any) => result.id !== user.id)
+                    .map((result: any) => (
+                      <div
+                        key={result.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
+                        data-testid={`search-result-${result.id}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarImage src={result.avatarUrl || undefined} />
+                            <AvatarFallback className="bg-primary/10 text-primary">
+                              {result.fullName.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-semibold">{result.fullName}</p>
+                            <p className="text-sm text-muted-foreground">{result.email}</p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleAddFriend(result.id)}
+                          disabled={sendRequest.isPending}
+                          data-testid={`button-send-request-${result.id}`}
+                        >
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Add
+                        </Button>
+                      </div>
+                    ))
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddFriendDialogOpen(false);
+                setSearchQuery("");
+              }}
+              data-testid="button-close-add-friend"
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

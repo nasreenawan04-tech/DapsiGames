@@ -76,6 +76,72 @@ export function useUpdateProfile() {
   });
 }
 
+// Friend system hooks
+export function useFriends(userId: string | null | undefined) {
+  return useQuery<any[]>({
+    queryKey: ["/api/friends", userId],
+    enabled: !!userId,
+  });
+}
+
+export function useFriendRequests(userId: string | null | undefined) {
+  return useQuery<any[]>({
+    queryKey: ["/api/friends", userId, "requests"],
+    enabled: !!userId,
+  });
+}
+
+export function useSendFriendRequest() {
+  return useMutation({
+    mutationFn: async ({ userId, friendId }: { userId: string; friendId: string }) => {
+      return apiRequest("POST", "/api/friends/request", { userId, friendId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+    },
+  });
+}
+
+export function useAcceptFriendRequest() {
+  return useMutation({
+    mutationFn: async (friendshipId: string) => {
+      return apiRequest("PATCH", `/api/friends/${friendshipId}/accept`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+    },
+  });
+}
+
+export function useRejectFriendRequest() {
+  return useMutation({
+    mutationFn: async (friendshipId: string) => {
+      return apiRequest("PATCH", `/api/friends/${friendshipId}/reject`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+    },
+  });
+}
+
+export function useRemoveFriend() {
+  return useMutation({
+    mutationFn: async (friendshipId: string) => {
+      return apiRequest("DELETE", `/api/friends/${friendshipId}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/friends"] });
+    },
+  });
+}
+
+export function useSearchUsers(query: string) {
+  return useQuery<any[]>({
+    queryKey: ["/api/users/search", query],
+    enabled: query.length > 0,
+  });
+}
+
 // Game hooks
 export function useGames() {
   return useQuery<Game[]>({
