@@ -41,87 +41,101 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserPoints(userId: string, points: number): Promise<User>;
   getAllUsers(): Promise<User[]>;
-  
+
   // User Stats methods
   getUserStats(userId: string): Promise<UserStats | undefined>;
   createUserStats(stats: InsertUserStats): Promise<UserStats>;
   updateUserStats(userId: string, updates: Partial<UserStats>): Promise<UserStats>;
   getLeaderboard(limit?: number): Promise<(UserStats & { user: User })[]>;
-  
+
   // Game methods
   getGame(id: string): Promise<Game | undefined>;
   getAllGames(): Promise<Game[]>;
   createGame(game: InsertGame): Promise<Game>;
-  
+
   // Achievement Definition methods
   getAchievementDefinition(id: string): Promise<AchievementDefinition | undefined>;
   getAllAchievementDefinitions(): Promise<AchievementDefinition[]>;
   createAchievementDefinition(definition: InsertAchievementDefinition): Promise<AchievementDefinition>;
-  
+
   // User Achievement methods
   getUserAchievements(userId: string): Promise<UserAchievement[]>;
   createUserAchievement(achievement: InsertUserAchievement): Promise<UserAchievement>;
-  
+
   // Study Material methods
   getStudyMaterial(id: string): Promise<StudyMaterial | undefined>;
   getAllStudyMaterials(): Promise<StudyMaterial[]>;
   createStudyMaterial(material: InsertStudyMaterial): Promise<StudyMaterial>;
-  
+
   // User Activity methods
   getUserActivities(userId: string): Promise<UserActivity[]>;
   createUserActivity(activity: InsertUserActivity): Promise<UserActivity>;
-  
+
   // Game Score methods
   getUserGameScores(userId: string, gameId?: string): Promise<GameScore[]>;
   createGameScore(score: InsertGameScore): Promise<GameScore>;
-  
+
   // Bookmark methods
   getUserBookmarks(userId: string): Promise<Bookmark[]>;
   createBookmark(bookmark: InsertBookmark): Promise<Bookmark>;
   deleteBookmark(userId: string, studyMaterialId: string): Promise<void>;
-  
+
   // User Progress methods
   getUserProgress(userId: string, itemType?: string): Promise<UserProgress[]>;
   getProgressForItem(userId: string, itemId: string, itemType: string): Promise<UserProgress | undefined>;
   createUserProgress(progress: InsertUserProgress): Promise<UserProgress>;
   updateUserProgress(userId: string, itemId: string, itemType: string, updates: Partial<UserProgress>): Promise<UserProgress>;
-  
+
   // Task methods
   getUserTasks(userId: string): Promise<Task[]>;
   getTask(id: string): Promise<Task | undefined>;
   createTask(task: InsertTask): Promise<Task>;
   updateTask(taskId: string, updates: Partial<Task>): Promise<Task>;
   deleteTask(taskId: string): Promise<void>;
-  
+
   // StudySession methods
   getUserStudySessions(userId: string): Promise<StudySession[]>;
   getStudySession(id: string): Promise<StudySession | undefined>;
   createStudySession(session: InsertStudySession): Promise<StudySession>;
   updateStudySession(sessionId: string, updates: Partial<StudySession>): Promise<StudySession>;
-  
+
   // Friendship methods
   getUserFriendships(userId: string): Promise<Friendship[]>;
   getFriendship(id: string): Promise<Friendship | undefined>;
   createFriendship(friendship: InsertFriendship): Promise<Friendship>;
   updateFriendship(friendshipId: string, updates: Partial<Friendship>): Promise<Friendship>;
   deleteFriendship(friendshipId: string): Promise<void>;
-  
+
   // Group methods
   getGroup(id: string): Promise<Group | undefined>;
   getAllGroups(): Promise<Group[]>;
   getUserGroups(userId: string): Promise<Group[]>;
   createGroup(group: InsertGroup): Promise<Group>;
   updateGroup(groupId: string, updates: Partial<Group>): Promise<Group>;
-  
+
   // GroupMember methods
   getGroupMembers(groupId: string): Promise<GroupMember[]>;
   createGroupMember(member: InsertGroupMember): Promise<GroupMember>;
   deleteGroupMember(groupId: string, userId: string): Promise<void>;
-  
+
   // Streak methods
   getUserStreak(userId: string): Promise<Streak | undefined>;
   createStreak(streak: InsertStreak): Promise<Streak>;
   updateStreak(userId: string, updates: Partial<Streak>): Promise<Streak>;
+
+  // New methods for friends, tasks, study sessions
+  getUserFriends(userId: string): Promise<any[]>;
+  getFriendRequests(userId: string): Promise<any[]>;
+  checkFriendship(userId: string, friendId: string): Promise<Friendship | null>;
+  createFriendRequest(userId: string, friendId: string): Promise<Friendship>;
+  acceptFriendRequest(requestId: string): Promise<Friendship | null>;
+  rejectFriendRequest(requestId: string): Promise<Friendship | null>;
+  removeFriend(userId: string, friendId: string): Promise<void>;
+  createTask(data: InsertTask): Promise<Task>;
+  updateTask(taskId: string, data: Partial<InsertTask>): Promise<Task | null>;
+  completeTask(taskId: string): Promise<Task | null>;
+  deleteTask(taskId: string): Promise<void>;
+  completeStudySession(sessionId: string): Promise<StudySession | null>;
 }
 
 export class MemStorage implements IStorage {
@@ -159,10 +173,10 @@ export class MemStorage implements IStorage {
     this.groups = new Map();
     this.groupMembers = new Map();
     this.streaks = new Map();
-    
+
     this.seedInitialData();
   }
-  
+
   private seedInitialData(): void {
     const sampleGames: Game[] = [
       {
@@ -226,7 +240,7 @@ export class MemStorage implements IStorage {
         instructions: 'Drag and drop events to place them in the correct chronological order.'
       }
     ];
-    
+
     sampleGames.forEach(game => this.games.set(game.id, game));
   }
 
@@ -250,17 +264,17 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.users.set(id, user);
-    
+
     // Automatically create user stats
     await this.createUserStats({ userId: id });
-    
+
     return user;
   }
 
   async updateUserPoints(userId: string, points: number): Promise<User> {
     const user = this.users.get(userId);
     if (!user) throw new Error("User not found");
-    
+
     user.points = points;
     this.users.set(userId, user);
     await this.updateLeaderboardRanks();
@@ -274,7 +288,7 @@ export class MemStorage implements IStorage {
   private async updateLeaderboardRanks(): Promise<void> {
     const allStats = Array.from(this.userStats.values())
       .sort((a, b) => b.totalPoints - a.totalPoints);
-    
+
     allStats.forEach((stats, index) => {
       stats.currentRank = index + 1;
       this.userStats.set(stats.id, stats);
@@ -322,7 +336,7 @@ export class MemStorage implements IStorage {
   async updateUserStats(userId: string, updates: Partial<UserStats>): Promise<UserStats> {
     const stats = await this.getUserStats(userId);
     if (!stats) throw new Error("User stats not found");
-    
+
     const updated: UserStats = {
       ...stats,
       ...updates,
@@ -337,7 +351,7 @@ export class MemStorage implements IStorage {
     const allStats = Array.from(this.userStats.values())
       .sort((a, b) => b.totalPoints - a.totalPoints)
       .slice(0, limit);
-    
+
     return allStats.map((stats) => {
       const user = this.users.get(stats.userId);
       if (!user) throw new Error(`User not found for stats: ${stats.userId}`);
@@ -498,7 +512,7 @@ export class MemStorage implements IStorage {
   ): Promise<UserProgress> {
     const progress = await this.getProgressForItem(userId, itemId, itemType);
     if (!progress) throw new Error("User progress not found");
-    
+
     const updated: UserProgress = {
       ...progress,
       ...updates,
@@ -538,7 +552,7 @@ export class MemStorage implements IStorage {
   async updateTask(taskId: string, updates: Partial<Task>): Promise<Task> {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error("Task not found");
-    
+
     const updated: Task = {
       ...task,
       ...updates,
@@ -579,7 +593,7 @@ export class MemStorage implements IStorage {
   async updateStudySession(sessionId: string, updates: Partial<StudySession>): Promise<StudySession> {
     const session = this.studySessions.get(sessionId);
     if (!session) throw new Error("Study session not found");
-    
+
     const updated: StudySession = {
       ...session,
       ...updates,
@@ -616,7 +630,7 @@ export class MemStorage implements IStorage {
   async updateFriendship(friendshipId: string, updates: Partial<Friendship>): Promise<Friendship> {
     const friendship = this.friendships.get(friendshipId);
     if (!friendship) throw new Error("Friendship not found");
-    
+
     const updated: Friendship = {
       ...friendship,
       ...updates,
@@ -635,7 +649,7 @@ export class MemStorage implements IStorage {
     return this.groups.get(id);
   }
 
-  async getAllGroups(): Promise<Group[]> {
+  async getAllGroups(): Promise<Group[]<bos>> {
     return Array.from(this.groups.values());
   }
 
@@ -664,7 +678,7 @@ export class MemStorage implements IStorage {
   async updateGroup(groupId: string, updates: Partial<Group>): Promise<Group> {
     const group = this.groups.get(groupId);
     if (!group) throw new Error("Group not found");
-    
+
     const updated: Group = {
       ...group,
       ...updates,
@@ -725,7 +739,7 @@ export class MemStorage implements IStorage {
   async updateStreak(userId: string, updates: Partial<Streak>): Promise<Streak> {
     const streak = await this.getUserStreak(userId);
     if (!streak) throw new Error("Streak not found");
-    
+
     const updated: Streak = {
       ...streak,
       ...updates,
@@ -733,6 +747,232 @@ export class MemStorage implements IStorage {
     };
     this.streaks.set(streak.id, updated);
     return updated;
+  }
+
+  // New methods for friends, tasks, study sessions
+  async getUserStudySessions(userId: string): Promise<StudySession[]> {
+    return Array.from(this.studySessions.values()).filter(
+      (session) => session.userId === userId
+    );
+  }
+
+  async createStudySession(data: InsertStudySession): Promise<StudySession> {
+    const id = randomUUID();
+    const session: StudySession = {
+      ...data,
+      id,
+      xpEarned: 0,
+      completed: false,
+      startedAt: new Date(),
+      completedAt: null,
+    };
+    this.studySessions.set(id, session);
+    return session;
+  }
+
+  async completeStudySession(sessionId: string): Promise<StudySession | null> {
+    const session = this.studySessions.get(sessionId);
+    if (!session) return null;
+
+    const xpEarned = session.duration * 10; // 10 XP per minute
+    const updated: StudySession = {
+      ...session,
+      completed: true,
+      completedAt: new Date(),
+      xpEarned,
+    };
+    this.studySessions.set(sessionId, updated);
+    return updated;
+  }
+
+  async getUserFriends(userId: string): Promise<any[]> {
+    const friendships = Array.from(this.friendships.values()).filter(
+      (f) => (f.userId === userId || f.friendId === userId) && f.status === "accepted"
+    );
+    return friendships.map(f => {
+      const friendId = f.userId === userId ? f.friendId : f.userId;
+      const friend = this.users.get(friendId);
+      if (!friend) return null;
+      return {
+        id: f.id,
+        userId: f.userId,
+        friendId: f.friendId,
+        status: f.status,
+        createdAt: f.createdAt,
+        friendName: friend.fullName,
+        friendEmail: friend.email,
+        friendPoints: friend.points,
+        friendAvatarUrl: friend.avatarUrl,
+      };
+    }).filter(f => f !== null);
+  }
+
+  async getFriendRequests(userId: string): Promise<any[]> {
+    const friendships = Array.from(this.friendships.values()).filter(
+      (f) => f.friendId === userId && f.status === "pending"
+    );
+    return friendships.map(f => {
+      const sender = this.users.get(f.userId);
+      if (!sender) return null;
+      return {
+        id: f.id,
+        userId: f.userId,
+        friendId: f.friendId,
+        status: f.status,
+        createdAt: f.createdAt,
+        senderName: sender.fullName,
+        senderEmail: sender.email,
+        senderAvatarUrl: sender.avatarUrl,
+      };
+    }).filter(f => f !== null);
+  }
+
+  async checkFriendship(userId: string, friendId: string): Promise<Friendship | null> {
+    const friendship = Array.from(this.friendships.values()).find(
+      (f) =>
+        (f.userId === userId && f.friendId === friendId) ||
+        (f.userId === friendId && f.friendId === userId)
+    );
+    return friendship || null;
+  }
+
+  async createFriendRequest(userId: string, friendId: string): Promise<Friendship> {
+    const id = randomUUID();
+    const friendship: Friendship = {
+      id,
+      userId,
+      friendId,
+      status: "pending",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.friendships.set(id, friendship);
+    return friendship;
+  }
+
+  async acceptFriendRequest(requestId: string): Promise<Friendship | null> {
+    const friendship = this.friendships.get(requestId);
+    if (!friendship) return null;
+    const updated: Friendship = {
+      ...friendship,
+      status: "accepted",
+      updatedAt: new Date(),
+    };
+    this.friendships.set(requestId, updated);
+    return updated;
+  }
+
+  async rejectFriendRequest(requestId: string): Promise<Friendship | null> {
+    const friendship = this.friendships.get(requestId);
+    if (!friendship) return null;
+    const updated: Friendship = {
+      ...friendship,
+      status: "rejected",
+      updatedAt: new Date(),
+    };
+    this.friendships.set(requestId, updated);
+    return updated;
+  }
+
+  async removeFriend(userId: string, friendId: string): Promise<void> {
+    const friendship = Array.from(this.friendships.values()).find(
+      (f) =>
+        (f.userId === userId && f.friendId === friendId) ||
+        (f.userId === friendId && f.friendId === userId)
+    );
+    if (friendship) {
+      this.friendships.delete(friendship.id);
+    }
+  }
+
+  async createTask(data: InsertTask): Promise<Task> {
+    const id = randomUUID();
+    const task: Task = {
+      ...data,
+      id,
+      completed: false,
+      createdAt: new Date(),
+      completedAt: null,
+    };
+    this.tasks.set(id, task);
+    return task;
+  }
+
+  async updateTask(taskId: string, data: Partial<InsertTask>): Promise<Task | null> {
+    const task = this.tasks.get(taskId);
+    if (!task) return null;
+    const updated: Task = {
+      ...task,
+      ...data,
+    };
+    this.tasks.set(taskId, updated);
+    return updated;
+  }
+
+  async completeTask(taskId: string): Promise<Task | null> {
+    const task = this.tasks.get(taskId);
+    if (!task) return null;
+    const updated: Task = {
+      ...task,
+      completed: true,
+      completedAt: new Date(),
+    };
+    this.tasks.set(taskId, updated);
+    return updated;
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    this.tasks.delete(taskId);
+  }
+
+  async updateStreak(userId: string): Promise<void> {
+    const existing = await this.getUserStreak(userId);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (!existing) {
+      const id = randomUUID();
+      const streak: Streak = {
+        id,
+        userId,
+        currentStreak: 1,
+        longestStreak: 1,
+        lastStudyDate: new Date(),
+        updatedAt: new Date(),
+      };
+      this.streaks.set(id, streak);
+    } else {
+      const lastDate = existing.lastStudyDate ? new Date(existing.lastStudyDate) : null;
+      if (lastDate) {
+        lastDate.setHours(0, 0, 0, 0);
+        const daysDiff = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (daysDiff === 0) {
+          // Same day, no change
+          return;
+        } else if (daysDiff === 1) {
+          // Consecutive day
+          const newStreak = existing.currentStreak + 1;
+          const updated: Streak = {
+            ...existing,
+            currentStreak: newStreak,
+            longestStreak: Math.max(newStreak, existing.longestStreak),
+            lastStudyDate: new Date(),
+            updatedAt: new Date(),
+          };
+          this.streaks.set(existing.id, updated);
+        } else {
+          // Streak broken
+          const updated: Streak = {
+            ...existing,
+            currentStreak: 1,
+            lastStudyDate: new Date(),
+            updatedAt: new Date(),
+          };
+          this.streaks.set(existing.id, updated);
+        }
+      }
+    }
   }
 }
 

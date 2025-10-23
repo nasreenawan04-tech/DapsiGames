@@ -65,6 +65,7 @@ import {
   initializeLevels,
   initializeBadges,
   getLevelFromXP,
+  broadcastPointsEarned,
 } from "./services/gamification";
 import { eq, desc, sql, inArray } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -79,15 +80,15 @@ const SALT_ROUNDS = 10;
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   setupWebSocket(httpServer);
-  
+
   app.get("/api/health", healthCheck);
   // ===== Authentication Routes =====
-  
+
   // Register new user
   app.post("/api/auth/register", validateRegistration, async (req: Request, res: Response) => {
     try {
       const validatedData = insertUserSchema.parse(req.body);
-      
+
       const existingUser = await storage.getUserByEmail(validatedData.email);
 
       if (existingUser) {
@@ -208,7 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== User Routes =====
-  
+
   // Get current user
   app.get("/api/user/:userId", async (req, res) => {
     try {
@@ -229,7 +230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/leaderboard", cacheMiddleware(60000), async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 100;
-      
+
       const leaderboard = await db
         .select({
           userId: userStats.userId,
@@ -255,7 +256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/user/:userId/points", async (req, res) => {
     try {
       const { points } = req.body;
-      
+
       if (typeof points !== "number") {
         return res.status(400).json({ error: "Points must be a number" });
       }
@@ -302,9 +303,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { fullName, avatarUrl } = req.body;
-      
+
       const updateData: any = {};
-      
+
       if (fullName !== undefined) {
         if (typeof fullName !== "string") {
           return res.status(400).json({ error: "Name must be a string" });
@@ -315,7 +316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         updateData.fullName = trimmedName;
       }
-      
+
       if (avatarUrl !== undefined) {
         if (typeof avatarUrl !== "string") {
           return res.status(400).json({ error: "Avatar URL must be a string" });
@@ -355,7 +356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== User Stats Routes =====
-  
+
   // Get user stats
   app.get("/api/stats/:userId", async (req, res) => {
     try {
@@ -379,7 +380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/stats/:userId", async (req, res) => {
     try {
       const { totalPoints, gamesPlayed, studySessions } = req.body;
-      
+
       const updateData: any = {};
       if (totalPoints !== undefined) updateData.totalPoints = totalPoints;
       if (gamesPlayed !== undefined) updateData.gamesPlayed = gamesPlayed;
@@ -406,16 +407,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Friend System Routes =====
-  
+
   // Send friend request
   app.post("/api/friends/request", async (req, res) => {
     try {
       const { userId, friendId } = req.body;
-      
+
       if (!userId || !friendId) {
         return res.status(400).json({ error: "User ID and Friend ID required" });
       }
-      
+
       if (userId === friendId) {
         return res.status(400).json({ error: "Cannot send friend request to yourself" });
       }
@@ -427,7 +428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !friend) {
         return res.status(404).json({ error: "User not found" });
       }
-      
+
       // Check if friendship already exists
       const existingFriendships = await storage.getUserFriendships(userId);
       const existing = existingFriendships.find(
@@ -435,87 +436,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
           (f.userId === userId && f.friendId === friendId) ||
           (f.userId === friendId && f.friendId === userId)
       );
-      
+
       if (existing) {
         return res.status(400).json({ error: "Friend request already exists" });
       }
-      
+
       const friendship = await storage.createFriendship({ userId, friendId });
-      
+
       res.json(friendship);
     } catch (error: any) {
       console.error("Error sending friend request:", error);
       res.status(500).json({ error: error.message });
     }
   });
-  
+
   // Accept friend request
   app.patch("/api/friends/:friendshipId/accept", async (req, res) => {
     try {
       const { friendshipId } = req.params;
-      
+
       const updated = await storage.updateFriendship(friendshipId, { 
         status: 'accepted', 
         updatedAt: new Date() 
       });
-      
+
       if (!updated) {
         return res.status(404).json({ error: "Friend request not found" });
       }
-      
+
       res.json(updated);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Reject friend request
   app.patch("/api/friends/:friendshipId/reject", async (req, res) => {
     try {
       const { friendshipId } = req.params;
-      
+
       const updated = await storage.updateFriendship(friendshipId, { 
         status: 'rejected', 
         updatedAt: new Date() 
       });
-      
+
       if (!updated) {
         return res.status(404).json({ error: "Friend request not found" });
       }
-      
+
       res.json(updated);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Remove friend
   app.delete("/api/friends/:friendshipId", async (req, res) => {
     try {
       const { friendshipId } = req.params;
-      
+
       await storage.deleteFriendship(friendshipId);
-      
+
       res.json({ success: true });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get user's friends (accepted friendships)
   app.get("/api/friends/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
-      
+
       const friendships = await storage.getUserFriendships(userId);
       const acceptedFriendships = friendships.filter(f => f.status === 'accepted');
-      
+
       const userFriends = await Promise.all(acceptedFriendships.map(async (friendship) => {
         const friendId = friendship.userId === userId ? friendship.friendId : friendship.userId;
         const friendUser = await storage.getUser(friendId);
-        
+
         if (!friendUser) return null;
-        
+
         return {
           friendshipId: friendship.id,
           userId: friendUser.id,
@@ -528,26 +529,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdAt: friendship.createdAt,
         };
       }));
-      
+
       res.json(userFriends.filter(f => f !== null));
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get pending friend requests for a user
   app.get("/api/friends/:userId/requests", async (req, res) => {
     try {
       const { userId } = req.params;
-      
+
       const friendships = await storage.getUserFriendships(userId);
       const pendingRequests = friendships.filter(f => f.friendId === userId && f.status === 'pending');
-      
+
       const requests = await Promise.all(pendingRequests.map(async (friendship) => {
         const requesterUser = await storage.getUser(friendship.userId);
-        
+
         if (!requesterUser) return null;
-        
+
         return {
           friendshipId: friendship.id,
           userId: requesterUser.id,
@@ -557,25 +558,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdAt: friendship.createdAt,
         };
       }));
-      
+
       res.json(requests.filter(r => r !== null));
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Search users (for adding friends)
   app.get("/api/users/search", async (req, res) => {
     try {
       const { query, userId } = req.query;
-      
+
       if (!query || typeof query !== 'string' || query.trim().length < 2) {
         return res.json([]);
       }
-      
+
       const allUsers = await storage.getAllUsers();
       const lowerQuery = query.toLowerCase();
-      
+
       // Exclude the current user from search results
       const searchResults = allUsers
         .filter(user => {
@@ -593,7 +594,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           rank: user.rank,
           avatarUrl: user.avatarUrl,
         }));
-      
+
       res.json(searchResults);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -601,43 +602,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Social Groups Routes =====
-  
+
   // Create a new group
   app.post("/api/groups", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
     try {
-      const validatedData = insertGroupSchema.parse(req.body);
-      
-      const newGroup = await storage.createGroup(validatedData);
-      
-      // Automatically add creator as owner
-      try {
-        await storage.createGroupMember({
-          groupId: newGroup.id,
-          userId: validatedData.ownerId,
-          role: 'owner',
-        });
-      } catch (memberError: any) {
-        console.error("Error adding group owner as member:", memberError);
-        // Continue even if member addition fails
+      const { name, description, ownerId, isPublic } = req.body;
+
+      if (!name || !ownerId) {
+        return res.status(400).send({ error: "Missing required fields" });
       }
-      
-      res.json(newGroup);
+
+      // Create the group
+      const group = await storage.createGroup({
+        name,
+        description,
+        ownerId,
+        isPublic: isPublic !== undefined ? isPublic : true,
+      });
+
+      // Add creator as owner member
+      await storage.joinGroup(group.id, ownerId, "owner");
+
+      res.json(group);
     } catch (error: any) {
       console.error("Error creating group:", error);
-      res.status(400).json({ error: error.message });
+      res.status(500).send({ error: error.message });
     }
   });
-  
+
   // Get all public groups
   app.get("/api/groups", async (req, res) => {
     try {
       const allGroups = await storage.getAllGroups();
       const publicGroups = allGroups.filter(g => g.isPublic);
-      
+
       const enrichedGroups = await Promise.all(publicGroups.map(async (group) => {
         const owner = await storage.getUser(group.ownerId);
         const members = await storage.getGroupMembers(group.id);
-        
+
         return {
           id: group.id,
           name: group.name,
@@ -650,29 +656,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           memberCount: members.length,
         };
       }));
-      
+
       res.json(enrichedGroups);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get user's groups
   app.get("/api/groups/user/:userId", async (req, res) => {
     try {
       const { userId } = req.params;
-      
+
       const userGroups = await storage.getUserGroups(userId);
-      
+
       if (userGroups.length === 0) {
         return res.json([]);
       }
-      
+
       const result = await Promise.all(userGroups.map(async (group) => {
         const members = await storage.getGroupMembers(group.id);
         const allMembers = await storage.getGroupMembers(group.id);
         const userMembership = allMembers.find(m => m.userId === userId);
-        
+
         return {
           id: group.id,
           name: group.name,
@@ -685,36 +691,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           joinedAt: userMembership?.joinedAt,
         };
       }));
-      
+
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get group details
   app.get("/api/groups/:groupId", async (req, res) => {
     try {
       const { groupId } = req.params;
-      
+
       const group = await storage.getGroup(groupId);
-      
+
       if (!group) {
         return res.status(404).json({ error: "Group not found" });
       }
-      
+
       res.json(group);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Join a group
   app.post("/api/groups/:groupId/join", async (req, res) => {
     try {
       const { groupId } = req.params;
       const { userId } = req.body;
-      
+
       if (!userId) {
         return res.status(400).json({ error: "User ID required" });
       }
@@ -722,18 +728,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!db) {
         return res.status(503).json({ error: "Database not available" });
       }
-      
+
       // Check if user is already a member
-      const existing = await db
+      const [existing] = await db
         .select()
         .from(groupMembers)
         .where(sql`${groupMembers.groupId} = ${groupId} AND ${groupMembers.userId} = ${userId}`)
         .limit(1);
-      
+
       if (existing.length > 0) {
         return res.status(400).json({ error: "Already a member of this group" });
       }
-      
+
       const [membership] = await db
         .insert(groupMembers)
         .values({
@@ -742,44 +748,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: 'member',
         })
         .returning();
-      
+
       res.json(membership);
     } catch (error: any) {
       console.error("Error joining group:", error);
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Leave a group
   app.post("/api/groups/:groupId/leave", async (req, res) => {
     try {
       const { groupId } = req.params;
       const { userId } = req.body;
-      
+
       if (!userId) {
         return res.status(400).json({ error: "User ID required" });
       }
-      
+
       await storage.deleteGroupMember(groupId, userId);
-      
+
       res.json({ success: true });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get group members
   app.get("/api/groups/:groupId/members", async (req, res) => {
     try {
       const { groupId } = req.params;
-      
+
       const groupMembers = await storage.getGroupMembers(groupId);
-      
+
       const members = await Promise.all(groupMembers.map(async (member) => {
         const user = await storage.getUser(member.userId);
-        
+
         if (!user) return null;
-        
+
         return {
           membershipId: member.id,
           userId: user.id,
@@ -792,21 +798,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           joinedAt: member.joinedAt,
         };
       }));
-      
+
       const enrichedMembers = members.filter(m => m !== null);
       enrichedMembers.sort((a, b) => (b?.points || 0) - (a?.points || 0));
-      
+
       res.json(enrichedMembers);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get group leaderboard
   app.get("/api/groups/:groupId/leaderboard", async (req, res) => {
     try {
       const { groupId } = req.params;
-      
+
       const leaderboard = await db
         .select({
           userId: users.id,
@@ -823,19 +829,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .leftJoin(userStats, eq(users.id, userStats.userId))
         .where(eq(groupMembers.groupId, groupId))
         .orderBy(desc(users.points));
-      
+
       res.json(leaderboard);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get group activity feed
   app.get("/api/groups/:groupId/activities", async (req, res) => {
     try {
       const { groupId } = req.params;
       const limit = parseInt(req.query.limit as string) || 20;
-      
+
       const activities = await db
         .select({
           activityId: userActivities.id,
@@ -853,13 +859,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(groupMembers.groupId, groupId))
         .orderBy(desc(userActivities.timestamp))
         .limit(limit);
-      
+
       res.json(activities);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Create group challenge
   app.post("/api/groups/:groupId/challenges", async (req, res) => {
     try {
@@ -868,29 +874,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         groupId,
       });
-      
+
       const [challenge] = await db
         .insert(groupChallenges)
         .values(validatedData)
         .returning();
-      
+
       res.json(challenge);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get group challenges
   app.get("/api/groups/:groupId/challenges", async (req, res) => {
     try {
       const { groupId } = req.params;
-      
+
       const challenges = await db
         .select()
         .from(groupChallenges)
         .where(eq(groupChallenges.groupId, groupId))
         .orderBy(desc(groupChallenges.createdAt));
-      
+
       res.json(challenges);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -966,7 +972,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Game Routes =====
-  
+
   // Get all games (cached for 5 minutes)
   app.get("/api/games", cacheMiddleware(), async (req, res) => {
     try {
@@ -1094,7 +1100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Study Material Routes =====
-  
+
   // Get all study materials (cached for 5 minutes)
   app.get("/api/study", cacheMiddleware(), async (req, res) => {
     try {
@@ -1196,7 +1202,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Achievement Routes =====
-  
+
   // Get all achievement definitions (cached for 5 minutes)
   app.get("/api/achievements/definitions", cacheMiddleware(), async (req, res) => {
     try {
@@ -1266,7 +1272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Bookmark Routes =====
-  
+
   // Get user bookmarks
   app.get("/api/bookmarks/:userId", async (req, res) => {
     try {
@@ -1313,7 +1319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== User Activity Routes =====
-  
+
   // Get all activities (for leaderboard time filtering)
   app.get("/api/activities/all", async (req, res) => {
     try {
@@ -1338,7 +1344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get user activities
   app.get("/api/activities/:userId", async (req, res) => {
     try {
@@ -1356,12 +1362,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== User Progress Routes =====
-  
+
   // Get user progress for all items or by type
   app.get("/api/progress/:userId", async (req, res) => {
     try {
       const itemType = req.query.itemType as string | undefined;
-      
+
       let progress;
       if (itemType) {
         progress = await db
@@ -1389,7 +1395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/progress/:userId/:itemId", async (req, res) => {
     try {
       const itemType = req.query.itemType as string;
-      
+
       if (!itemType) {
         return res.status(400).json({ error: "itemType query parameter required" });
       }
@@ -1416,7 +1422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/progress", async (req, res) => {
     try {
       const validatedData = insertUserProgressSchema.parse(req.body);
-      
+
       // Check if progress already exists
       const existing = await db
         .select()
@@ -1430,7 +1436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update existing progress
         const updateData = req.body;
         updateData.lastAccessedAt = new Date();
-        
+
         const [updated] = await db
           .update(userProgress)
           .set(updateData)
@@ -1490,7 +1496,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     const lastStudy = userStreak.lastStudyDate ? new Date(userStreak.lastStudyDate) : null;
-    
+
     if (!lastStudy) {
       // First study session
       await db
@@ -1537,309 +1543,199 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // ===== Study Sessions Routes (Pomodoro Timer) =====
-  
-  // Create a new study session
-  app.post("/api/study-sessions", async (req, res) => {
-    try {
-      const validatedData = insertStudySessionSchema.parse(req.body);
-      
-      const newSession = await storage.createStudySession(validatedData);
-
-      res.json(newSession);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
 
   // Get study sessions for a user
   app.get("/api/study-sessions/:userId", async (req, res) => {
-    try {
-      const limit = parseInt(req.query.limit as string) || 50;
-      
-      const sessions = await storage.getUserStudySessions(req.params.userId);
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
 
+    try {
+      const sessions = await storage.getUserStudySessions(req.params.userId);
       res.json(sessions);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      console.error("Error fetching study sessions:", error);
+      res.status(500).send({ error: error.message });
     }
   });
 
-  // Complete a study session and award XP
+  app.post("/api/study-sessions", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
+    try {
+      const { userId, duration, ambientSound } = req.body;
+
+      if (!userId || !duration) {
+        return res.status(400).send({ error: "Missing required fields" });
+      }
+
+      const session = await storage.createStudySession({
+        userId,
+        duration,
+        ambientSound: ambientSound || "silence",
+      });
+
+      res.json(session);
+    } catch (error: any) {
+      console.error("Error creating study session:", error);
+      res.status(500).send({ error: error.message });
+    }
+  });
+
   app.patch("/api/study-sessions/:sessionId/complete", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
     try {
       const { sessionId } = req.params;
-      
-      // Get the session
-      const [session] = await db
-        .select()
-        .from(studySessions)
-        .where(eq(studySessions.id, sessionId))
-        .limit(1);
+      const session = await storage.completeStudySession(sessionId);
 
       if (!session) {
-        return res.status(404).json({ error: "Study session not found" });
+        return res.status(404).send({ error: "Session not found" });
       }
 
-      if (session.completed) {
-        return res.status(400).json({ error: "Session already completed" });
-      }
-
-      // Calculate XP based on duration (10 XP per minute)
-      const xpEarned = session.duration * 10;
-
-      // Mark session as complete
-      const [updatedSession] = await db
-        .update(studySessions)
-        .set({ 
-          completed: true, 
-          xpEarned,
-          completedAt: new Date() 
-        })
-        .where(eq(studySessions.id, sessionId))
-        .returning();
-
-      // Update user points and stats
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, session.userId))
-        .limit(1);
-
+      // Update user XP
+      const user = await storage.getUser(session.userId);
       if (user) {
-        const newPoints = user.points + xpEarned;
-        
-        await db
-          .update(users)
-          .set({ points: newPoints })
-          .where(eq(users.id, session.userId));
-
-        // Update user stats
-        const [stats] = await db
-          .select()
-          .from(userStats)
-          .where(eq(userStats.userId, session.userId))
-          .limit(1);
-        
-        if (stats) {
-          await db
-            .update(userStats)
-            .set({ 
-              totalPoints: newPoints,
-              studySessions: (stats.studySessions || 0) + 1,
-              updatedAt: new Date()
-            })
-            .where(eq(userStats.userId, session.userId));
-        } else {
-          // Create stats if doesn't exist
-          await db.insert(userStats).values({
-            userId: session.userId,
-            totalPoints: newPoints,
-            studySessions: 1,
-          });
-        }
+        await storage.addUserPoints(session.userId, session.xpEarned);
 
         // Update streak
-        await updateStreak(session.userId);
-        
-        // Record activity
-        await db.insert(userActivities).values({
-          userId: session.userId,
-          activityType: "study_session",
-          activityTitle: `Completed ${session.duration} min study session`,
-          pointsEarned: xpEarned,
-        });
+        await storage.updateStreak(session.userId);
 
-        await updateLeaderboardRanks();
-        broadcastLeaderboardUpdate();
+        // Broadcast points update
+        broadcastPointsEarned(session.userId, session.xpEarned, "Completed study session");
       }
 
-      res.json(updatedSession);
+      res.json(session);
     } catch (error: any) {
       console.error("Error completing study session:", error);
-      res.status(400).json({ error: error.message });
+      res.status(500).send({ error: error.message });
     }
   });
 
   // ===== Tasks Routes =====
-  
+
   // Get tasks for a user
   app.get("/api/tasks/:userId", async (req, res) => {
-    try {
-      const userTasks = await storage.getUserTasks(req.params.userId);
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
 
-      res.json(userTasks);
+    try {
+      const tasks = await storage.getUserTasks(req.params.userId);
+      res.json(tasks);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      console.error("Error fetching tasks:", error);
+      res.status(500).send({ error: error.message });
     }
   });
 
-  // Create a new task
   app.post("/api/tasks", async (req, res) => {
-    try {
-      const validatedData = insertTaskSchema.parse(req.body);
-      
-      const newTask = await storage.createTask(validatedData);
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
 
-      res.json(newTask);
+    try {
+      const { userId, title, description, category, priority, deadline, xpReward, bonusXp } = req.body;
+
+      if (!userId || !title || !category || !priority) {
+        return res.status(400).send({ error: "Missing required fields" });
+      }
+
+      const task = await storage.createTask({
+        userId,
+        title,
+        description,
+        category,
+        priority,
+        deadline: deadline ? new Date(deadline) : null,
+        xpReward: xpReward || 10,
+        bonusXp: bonusXp || 0,
+      });
+
+      res.json(task);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      console.error("Error creating task:", error);
+      res.status(500).send({ error: error.message });
     }
   });
 
-  // Update a task
   app.patch("/api/tasks/:taskId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
     try {
       const { title, description, category, priority, deadline } = req.body;
-      
-      const updateData: any = {};
-      if (title !== undefined) updateData.title = title;
-      if (description !== undefined) updateData.description = description;
-      if (category !== undefined) updateData.category = category;
-      if (priority !== undefined) updateData.priority = priority;
-      if (deadline !== undefined) updateData.deadline = deadline;
+      const task = await storage.updateTask(req.params.taskId, {
+        title,
+        description,
+        category,
+        priority,
+        deadline: deadline ? new Date(deadline) : null,
+      });
 
-      const [updatedTask] = await db
-        .update(tasks)
-        .set(updateData)
-        .where(eq(tasks.id, req.params.taskId))
-        .returning();
-
-      if (!updatedTask) {
-        return res.status(404).json({ error: "Task not found" });
+      if (!task) {
+        return res.status(404).send({ error: "Task not found" });
       }
 
-      res.json(updatedTask);
+      res.json(task);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      console.error("Error updating task:", error);
+      res.status(500).send({ error: error.message });
     }
   });
 
-  // Complete a task
   app.patch("/api/tasks/:taskId/complete", async (req, res) => {
-    try {
-      const { taskId } = req.params;
-      
-      if (!db) {
-        return res.status(503).json({ error: "Database not available" });
-      }
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
 
-      const [task] = await db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1);
+    try {
+      const task = await storage.completeTask(req.params.taskId);
 
       if (!task) {
-        return res.status(404).json({ error: "Task not found" });
-      }
-
-      if (task.completed) {
-        return res.status(400).json({ error: "Task already completed" });
+        return res.status(404).send({ error: "Task not found" });
       }
 
       // Calculate XP with bonus for early completion
-      let totalXp = task.xpReward;
-      
-      if (task.deadline) {
-        const now = new Date();
-        const deadline = new Date(task.deadline);
-        
-        if (now < deadline) {
-          totalXp += task.bonusXp;
-        }
+      let xpEarned = task.xpReward;
+      if (task.deadline && new Date() < new Date(task.deadline)) {
+        xpEarned += task.bonusXp;
       }
 
-      // Mark task as complete
-      const [updatedTask] = await db
-        .update(tasks)
-        .set({ 
-          completed: true,
-          completedAt: new Date()
-        })
-        .where(eq(tasks.id, taskId))
-        .returning();
+      // Update user XP
+      await storage.addUserPoints(task.userId, xpEarned);
 
-      // Update user points
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, task.userId))
-        .limit(1);
+      // Broadcast points update
+      broadcastPointsEarned(task.userId, xpEarned, `Completed task: ${task.title}`);
 
-      if (user) {
-        const newPoints = user.points + totalXp;
-        
-        await db
-          .update(users)
-          .set({ points: newPoints })
-          .where(eq(users.id, task.userId));
-
-        // Update user stats
-        const [stats] = await db
-          .select()
-          .from(userStats)
-          .where(eq(userStats.userId, task.userId))
-          .limit(1);
-        
-        if (stats) {
-          await db
-            .update(userStats)
-            .set({ 
-              totalPoints: newPoints,
-              updatedAt: new Date()
-            })
-            .where(eq(userStats.userId, task.userId));
-        } else {
-          await db.insert(userStats).values({
-            userId: task.userId,
-            totalPoints: newPoints,
-          });
-        }
-
-        // Record activity
-        await db.insert(userActivities).values({
-          userId: task.userId,
-          activityType: "task_completed",
-          activityTitle: task.title,
-          pointsEarned: totalXp,
-        });
-
-        await updateLeaderboardRanks();
-        broadcastLeaderboardUpdate();
-      }
-
-      res.json({ ...updatedTask, xpEarned: totalXp });
+      res.json({ ...task, xpEarned });
     } catch (error: any) {
       console.error("Error completing task:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).send({ error: error.message });
     }
   });
 
-  // Delete a task
   app.delete("/api/tasks/:taskId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
     try {
-      if (!db) {
-        return res.status(503).json({ error: "Database not available" });
-      }
-
-      const deletedTasks = await db
-        .delete(tasks)
-        .where(eq(tasks.id, req.params.taskId))
-        .returning();
-
-      if (!deletedTasks || deletedTasks.length === 0) {
-        return res.status(404).json({ error: "Task not found" });
-      }
-
-      res.json({ message: "Task deleted successfully" });
+      await storage.deleteTask(req.params.taskId);
+      res.json({ success: true });
     } catch (error: any) {
       console.error("Error deleting task:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).send({ error: error.message });
     }
   });
 
   // ===== Streaks Routes =====
-  
+
   // Get streak for a user
   app.get("/api/streaks/:userId", async (req, res) => {
     try {
@@ -1864,7 +1760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               longestStreak: 0,
             })
             .returning();
-          
+
           return res.json(newStreak);
         } catch (insertError: any) {
           // If insert fails, try to select again (race condition)
@@ -1873,11 +1769,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .from(streaks)
             .where(eq(streaks.userId, req.params.userId))
             .limit(1);
-          
+
           if (existingStreak) {
             return res.json(existingStreak);
           }
-          
+
           throw insertError;
         }
       }
@@ -1890,7 +1786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Badges Routes =====
-  
+
   // Get all badges
   app.get("/api/badges", cacheMiddleware(), async (req, res) => {
     try {
@@ -1929,7 +1825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== Seed Data Route (for development) =====
-  
+
   app.post("/api/seed", async (req, res) => {
     try {
       // Seed games
@@ -1964,7 +1860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       const existingGames = await db.select().from(games);
-      
+
       if (existingGames.length === 0) {
         await db.insert(games).values(gamesToSeed);
       }
@@ -1990,7 +1886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       const existingMaterials = await db.select().from(studyMaterials);
-      
+
       if (existingMaterials.length === 0) {
         await db.insert(studyMaterials).values(materialsToSeed);
       }
@@ -2042,7 +1938,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       const existingAchievements = await db.select().from(achievementDefinitions);
-      
+
       if (existingAchievements.length === 0) {
         await db.insert(achievementDefinitions).values(achievementsToSeed);
       }
@@ -2054,7 +1950,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ===== PHASE 6: Gamification Backend & Advanced Features =====
-  
+
   // Initialize levels and badges on server start
   initializeLevels().catch((error) => {
     console.error("Failed to initialize levels:", error.message);
@@ -2062,9 +1958,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   initializeBadges().catch((error) => {
     console.error("Failed to initialize badges:", error.message);
   });
-  
+
   // ==== XP & Level System Routes ====
-  
+
   // Get user level info
   app.get("/api/users/:userId/level", async (req, res) => {
     try {
@@ -2073,13 +1969,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(userLevels)
         .where(eq(userLevels.userId, req.params.userId))
         .limit(1);
-      
+
       if (!userLevel) {
         return res.status(404).json({ error: "User level not found" });
       }
-      
+
       const levelInfo = await getLevelFromXP(userLevel.totalXp);
-      
+
       res.json({
         ...userLevel,
         ...levelInfo,
@@ -2088,27 +1984,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Award XP to user (used after completing sessions, tasks, games)
   app.post("/api/users/:userId/xp", async (req, res) => {
     try {
       const { amount, reason } = req.body;
-      
+
       if (typeof amount !== "number" || amount <= 0) {
         return res.status(400).json({ error: "Invalid XP amount" });
       }
-      
+
       const result = await awardXP(req.params.userId, amount);
-      
+
       // Check for new achievements
       const newBadges = await checkAndAwardAchievements(req.params.userId);
-      
+
       // Update streak
       const streakResult = await updateStreak(req.params.userId);
-      
+
       // Broadcast leaderboard update
       broadcastLeaderboardUpdate();
-      
+
       res.json({
         ...result,
         newBadges,
@@ -2119,7 +2015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get all levels
   app.get("/api/levels", async (req, res) => {
     try {
@@ -2127,15 +2023,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select()
         .from(levels)
         .orderBy(levels.levelNumber);
-      
+
       res.json(levelList);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // ==== Coins System Routes ====
-  
+
   // Get user coins
   app.get("/api/users/:userId/coins", async (req, res) => {
     try {
@@ -2144,42 +2040,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(userCoins)
         .where(eq(userCoins.userId, req.params.userId))
         .limit(1);
-      
+
       if (!coins) {
         // Create default coins record
         const [newCoins] = await db
           .insert(userCoins)
           .values({ userId: req.params.userId })
           .returning();
-        
+
         return res.json(newCoins);
       }
-      
+
       res.json(coins);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Award coins (manual or system)
   app.post("/api/users/:userId/coins/award", async (req, res) => {
     try {
       const { amount, reason } = req.body;
-      
+
       if (typeof amount !== "number" || amount <= 0) {
         return res.status(400).json({ error: "Invalid coin amount" });
       }
-      
+
       const result = await awardCoins(req.params.userId, amount, reason || "Coins awarded");
-      
+
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // ==== Streak System Routes ====
-  
+
   // Get user streak
   app.get("/api/users/:userId/streak", async (req, res) => {
     try {
@@ -2188,23 +2084,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(streaks)
         .where(eq(streaks.userId, req.params.userId))
         .limit(1);
-      
+
       if (!streak) {
         // Create default streak record
         const [newStreak] = await db
           .insert(streaks)
           .values({ userId: req.params.userId })
           .returning();
-        
+
         return res.json(newStreak);
       }
-      
+
       res.json(streak);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Update streak (called after study session)
   app.post("/api/users/:userId/streak/update", async (req, res) => {
     try {
@@ -2214,9 +2110,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // ==== Badge System Routes ====
-  
+
   // Get all badges (definitions)
   app.get("/api/badges", async (req, res) => {
     try {
@@ -2226,7 +2122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get user badges
   app.get("/api/users/:userId/badges", async (req, res) => {
     try {
@@ -2239,52 +2135,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(userBadges)
         .innerJoin(badges, eq(userBadges.badgeId, badges.id))
         .where(eq(userBadges.userId, req.params.userId));
-      
+
       res.json(userBadgesList);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // ==== Friend System Routes ====
-  
+
   // Get user friends
   app.get("/api/users/:userId/friends", async (req, res) => {
     try {
       const friendsList = await db
-        .select({
-          friendship: friendships,
-          friend: users,
-        })
+        .select({ friendId: friendships.friendId })
         .from(friendships)
-        .innerJoin(users, eq(friendships.friendId, users.id))
         .where(eq(friendships.userId, req.params.userId));
-      
-      const friendsData = friendsList.map(({ friendship, friend }: any) => ({
-        id: friendship.id,
-        friendId: friend.id,
-        fullName: friend.fullName,
-        avatarUrl: friend.avatarUrl,
-        points: friend.points,
-        status: friendship.status,
-        createdAt: friendship.createdAt,
+
+      const friendsData = await Promise.all(friendsList.map(async (f: any) => {
+        const friend = await storage.getUser(f.friendId);
+        if (!friend) return null;
+
+        const friendship = await storage.getFriendship(req.params.userId, f.friendId);
+
+        return {
+          id: friendship?.id,
+          friendId: friend.id,
+          fullName: friend.fullName,
+          avatarUrl: friend.avatarUrl,
+          points: friend.points,
+          status: friendship?.status,
+          createdAt: friendship?.createdAt,
+        };
       }));
-      
-      res.json(friendsData);
+
+      return res.json(friendsData.filter(f => f !== null));
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Send friend request
   app.post("/api/users/:userId/friends/request", async (req, res) => {
     try {
       const { friendId } = req.body;
-      
+
       if (!friendId) {
         return res.status(400).json({ error: "Friend ID required" });
       }
-      
+
       // Check if friendship already exists
       const [existing] = await db
         .select()
@@ -2293,11 +2192,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sql`(${friendships.userId} = ${req.params.userId} AND ${friendships.friendId} = ${friendId}) OR (${friendships.userId} = ${friendId} AND ${friendships.friendId} = ${req.params.userId})`
         )
         .limit(1);
-      
+
       if (existing) {
         return res.status(400).json({ error: "Friendship already exists" });
       }
-      
+
       // Create friend request
       const [friendship] = await db
         .insert(friendships)
@@ -2307,32 +2206,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: "pending",
         })
         .returning();
-      
+
       res.json(friendship);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Accept/reject friend request
   app.patch("/api/friendships/:friendshipId", async (req, res) => {
     try {
       const { status } = req.body;
-      
+
       if (!["accepted", "rejected"].includes(status)) {
         return res.status(400).json({ error: "Invalid status" });
       }
-      
+
       const [updated] = await db
         .update(friendships)
         .set({ status, updatedAt: new Date() })
         .where(eq(friendships.id, req.params.friendshipId))
         .returning();
-      
+
       if (!updated) {
         return res.status(404).json({ error: "Friendship not found" });
       }
-      
+
       // If accepted, create reciprocal friendship
       if (status === "accepted") {
         const [reciprocal] = await db
@@ -2342,7 +2241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sql`${friendships.userId} = ${updated.friendId} AND ${friendships.friendId} = ${updated.userId}`
           )
           .limit(1);
-        
+
         if (!reciprocal) {
           await db.insert(friendships).values({
             userId: updated.friendId,
@@ -2351,13 +2250,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
-      
+
       res.json(updated);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get friend leaderboard
   app.get("/api/users/:userId/friends/leaderboard", async (req, res) => {
     try {
@@ -2368,14 +2267,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(
           sql`${friendships.userId} = ${req.params.userId} AND ${friendships.status} = 'accepted'`
         );
-      
+
       const friendIds = friendsList.map((f: any) => f.friendId);
       friendIds.push(req.params.userId); // Include current user
-      
+
       if (friendIds.length === 0) {
         return res.json([]);
       }
-      
+
       const leaderboard = await db
         .select({
           userId: userStats.userId,
@@ -2388,22 +2287,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .innerJoin(users, eq(userStats.userId, users.id))
         .where(inArray(userStats.userId, friendIds))
         .orderBy(desc(userStats.totalPoints));
-      
+
       res.json(leaderboard);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // ==== Reward Shop Routes ====
-  
+
   // Get all shop items
   app.get("/api/shop/items", async (req, res) => {
     try {
       const { category } = req.query;
-      
+
       let query = db.select().from(shopItems).where(eq(shopItems.isActive, true));
-      
+
       if (category && typeof category === "string") {
         query = db
           .select()
@@ -2412,34 +2311,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sql`${shopItems.isActive} = true AND ${shopItems.category} = ${category}`
           );
       }
-      
+
       const items = await query;
       res.json(items);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Purchase shop item
   app.post("/api/users/:userId/shop/purchase", async (req, res) => {
     try {
       const { shopItemId } = req.body;
-      
+
       if (!shopItemId) {
         return res.status(400).json({ error: "Shop item ID required" });
       }
-      
+
       // Get shop item
       const [item] = await db
         .select()
         .from(shopItems)
         .where(eq(shopItems.id, shopItemId))
         .limit(1);
-      
+
       if (!item || !item.isActive) {
         return res.status(404).json({ error: "Item not found or not available" });
       }
-      
+
       // Check if already owned
       const [existing] = await db
         .select()
@@ -2448,18 +2347,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sql`${userInventory.userId} = ${req.params.userId} AND ${userInventory.shopItemId} = ${shopItemId}`
         )
         .limit(1);
-      
+
       if (existing) {
         return res.status(400).json({ error: "Item already owned" });
       }
-      
+
       // Spend coins
       const spendResult = await spendCoins(req.params.userId, item.coinCost);
-      
+
       if (!spendResult.success) {
         return res.status(400).json({ error: spendResult.error });
       }
-      
+
       // Add to inventory
       const [inventoryItem] = await db
         .insert(userInventory)
@@ -2468,7 +2367,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           shopItemId,
         })
         .returning();
-      
+
       res.json({
         inventoryItem,
         newBalance: spendResult.newBalance,
@@ -2477,7 +2376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get user inventory
   app.get("/api/users/:userId/inventory", async (req, res) => {
     try {
@@ -2491,22 +2390,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(userInventory)
         .innerJoin(shopItems, eq(userInventory.shopItemId, shopItems.id))
         .where(eq(userInventory.userId, req.params.userId));
-      
+
       res.json(inventory);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Equip/unequip inventory item
   app.patch("/api/users/:userId/inventory/:itemId/equip", async (req, res) => {
     try {
       const { isEquipped } = req.body;
-      
+
       if (typeof isEquipped !== "boolean") {
         return res.status(400).json({ error: "isEquipped must be boolean" });
       }
-      
+
       // If equipping, unequip other items of the same category
       if (isEquipped) {
         const [item] = await db
@@ -2517,7 +2416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .innerJoin(shopItems, eq(userInventory.shopItemId, shopItems.id))
           .where(eq(userInventory.id, req.params.itemId))
           .limit(1);
-        
+
         if (item) {
           // Unequip all items of same category
           await db
@@ -2528,26 +2427,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
         }
       }
-      
+
       // Update the item
       const [updated] = await db
         .update(userInventory)
         .set({ isEquipped })
         .where(eq(userInventory.id, req.params.itemId))
         .returning();
-      
+
       if (!updated) {
         return res.status(404).json({ error: "Item not found" });
       }
-      
+
       res.json(updated);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // ==== Group Leaderboards & Competitions ====
-  
+
   // Get group leaderboard
   app.get("/api/groups/:groupId/leaderboard", async (req, res) => {
     try {
@@ -2555,13 +2454,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select({ userId: groupMembers.userId })
         .from(groupMembers)
         .where(eq(groupMembers.groupId, req.params.groupId));
-      
+
       const memberIds = membersList.map((m: any) => m.userId);
-      
+
       if (memberIds.length === 0) {
         return res.json([]);
       }
-      
+
       const leaderboard = await db
         .select({
           userId: userStats.userId,
@@ -2578,13 +2477,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sql`${groupMembers.groupId} = ${req.params.groupId} AND ${inArray(userStats.userId, memberIds)}`
         )
         .orderBy(desc(userStats.totalPoints));
-      
+
       res.json(leaderboard);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-  
+
   // Get group challenge progress
   app.get("/api/groups/:groupId/challenges/:challengeId/progress", async (req, res) => {
     try {
@@ -2593,22 +2492,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(groupChallenges)
         .where(eq(groupChallenges.id, req.params.challengeId))
         .limit(1);
-      
+
       if (!challenge) {
         return res.status(404).json({ error: "Challenge not found" });
       }
-      
+
       // Get all members
       const membersList = await db
         .select({ userId: groupMembers.userId })
         .from(groupMembers)
         .where(eq(groupMembers.groupId, req.params.groupId));
-      
+
       const memberIds = membersList.map((m: any) => m.userId);
-      
+
       // Calculate progress based on challenge type
       let progress: any[] = [];
-      
+
       if (challenge.challengeType === "points") {
         progress = await db
           .select({
@@ -2646,7 +2545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(inArray(users.id, memberIds))
           .orderBy(desc(userStats.gamesPlayed));
       }
-      
+
       res.json({
         challenge,
         progress,
@@ -2658,7 +2557,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ===== Stripe Payment & Subscription Routes =====
   // Referenced from blueprint:javascript_stripe
-  
+
   // Create payment intent for one-time payments
   app.post("/api/create-payment-intent", async (req: Request, res: Response) => {
     try {
@@ -2701,7 +2600,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get authenticated user from request
       const userId = req.userId!;
-      
+
       const [user] = await db
         .select()
         .from(users)
@@ -2715,7 +2614,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If user already has a subscription, return existing
       if (user.stripeSubscriptionId) {
         const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-        
+
         const latestInvoice = typeof subscription.latest_invoice === 'string'
           ? await stripe.invoices.retrieve(subscription.latest_invoice)
           : subscription.latest_invoice;
