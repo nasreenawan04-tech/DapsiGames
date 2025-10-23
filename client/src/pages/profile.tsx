@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { User, Award, Trophy, TrendingUp, Calendar, Settings, Camera, Users, UserPlus, Check, X, Search, Flame, Target } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ import { useAuth } from "@/lib/auth";
 import { useAchievements, useActivities, useUpdateProfile, useFriends, useFriendRequests, useSendFriendRequest, useAcceptFriendRequest, useRejectFriendRequest, useRemoveFriend, useSearchUsers, useStreak } from "@/lib/api-hooks";
 import { formatDistanceToNow, format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { FriendSearchModal } from "@/components/FriendSearchModal";
+
 
 export default function Profile() {
   const { user } = useAuth();
@@ -34,7 +36,7 @@ export default function Profile() {
   const rejectRequest = useRejectFriendRequest();
   const removeFriend = useRemoveFriend();
   const { toast } = useToast();
-  
+
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editedName, setEditedName] = useState("");
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
@@ -42,6 +44,8 @@ export default function Profile() {
   const [isAddFriendDialogOpen, setIsAddFriendDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { data: searchResults = [] } = useSearchUsers(searchQuery);
+  const [showFriendSearch, setShowFriendSearch] = useState(false);
+
 
   if (!user) {
     return null;
@@ -59,7 +63,7 @@ export default function Profile() {
 
   const handleSaveProfile = async () => {
     const trimmedName = editedName.trim();
-    
+
     if (trimmedName.length === 0) {
       toast({
         title: "Validation Error",
@@ -68,7 +72,7 @@ export default function Profile() {
       });
       return;
     }
-    
+
     try {
       await updateProfile.mutateAsync({
         userId: user.id,
@@ -90,7 +94,7 @@ export default function Profile() {
 
   const handleSaveAvatar = async () => {
     const trimmedUrl = avatarUrl.trim();
-    
+
     if (trimmedUrl.length > 0) {
       try {
         new URL(trimmedUrl);
@@ -103,7 +107,7 @@ export default function Profile() {
         return;
       }
     }
-    
+
     try {
       await updateProfile.mutateAsync({
         userId: user.id,
@@ -390,7 +394,7 @@ export default function Profile() {
                       {friends.length} friends
                     </CardDescription>
                   </div>
-                  <Button onClick={() => setIsAddFriendDialogOpen(true)} data-testid="button-add-friend">
+                  <Button onClick={() => setShowFriendSearch(true)} data-testid="button-add-friend">
                     <UserPlus className="h-4 w-4 mr-2" />
                     Add Friend
                   </Button>
@@ -444,7 +448,7 @@ export default function Profile() {
                     </div>
                   </div>
                 )}
-                
+
                 {friendsLoading ? (
                   <div className="text-center py-8 text-muted-foreground">Loading friends...</div>
                 ) : friends.length === 0 ? (
@@ -637,80 +641,13 @@ export default function Profile() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAddFriendDialogOpen} onOpenChange={setIsAddFriendDialogOpen}>
-        <DialogContent data-testid="dialog-add-friend">
-          <DialogHeader>
-            <DialogTitle>Add Friend</DialogTitle>
-            <DialogDescription>
-              Search for users by name or email to send a friend request.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search users..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-                data-testid="input-search-users"
-              />
-            </div>
-            
-            {searchQuery && (
-              <div className="max-h-64 overflow-y-auto space-y-2">
-                {searchResults.length === 0 ? (
-                  <p className="text-center py-4 text-muted-foreground">No users found</p>
-                ) : (
-                  searchResults
-                    .filter((result: any) => result.id !== user.id)
-                    .map((result: any) => (
-                      <div
-                        key={result.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
-                        data-testid={`search-result-${result.id}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar>
-                            <AvatarImage src={result.avatarUrl || undefined} />
-                            <AvatarFallback className="bg-primary/10 text-primary">
-                              {result.fullName.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-semibold">{result.fullName}</p>
-                            <p className="text-sm text-muted-foreground">{result.email}</p>
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleAddFriend(result.id)}
-                          disabled={sendRequest.isPending}
-                          data-testid={`button-send-request-${result.id}`}
-                        >
-                          <UserPlus className="h-4 w-4 mr-2" />
-                          Add
-                        </Button>
-                      </div>
-                    ))
-                )}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsAddFriendDialogOpen(false);
-                setSearchQuery("");
-              }}
-              data-testid="button-close-add-friend"
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <FriendSearchModal
+        isOpen={showFriendSearch}
+        onClose={() => setShowFriendSearch(false)}
+        onAddFriend={handleAddFriend}
+        currentUserId={user.id}
+      />
     </div>
+    </>
   );
 }

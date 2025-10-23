@@ -4,7 +4,11 @@ import type { Server as HttpServer } from "http";
 const clients = new Set<WebSocket>();
 
 export function setupWebSocket(server: HttpServer) {
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  const port = parseInt(process.env.PORT || '5000', 10);
+  const wss = new WebSocketServer({ 
+    server,
+    path: '/ws'
+  });
 
   wss.on("connection", (ws) => {
     clients.add(ws);
@@ -58,7 +62,7 @@ function handleClientMessage(ws: WebSocket, message: any) {
 
 export function broadcastLeaderboardUpdate() {
   const message = JSON.stringify({ type: "leaderboard_update", timestamp: Date.now() });
-  
+
   clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
@@ -72,7 +76,7 @@ export function broadcastLeaderboardData(leaderboardData: any[]) {
     data: leaderboardData,
     timestamp: Date.now() 
   });
-  
+
   clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
@@ -87,7 +91,7 @@ export function broadcastUserAchievement(userId: string, achievement: any) {
     achievement,
     timestamp: Date.now() 
   });
-  
+
   clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
@@ -103,7 +107,7 @@ export function broadcastPointsEarned(userId: string, points: number, activity: 
     activity,
     timestamp: Date.now() 
   });
-  
+
   clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
