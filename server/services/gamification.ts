@@ -19,10 +19,10 @@ import {
   type UserBadge,
 } from "@shared/schema";
 import { eq, sql, and, gte } from "drizzle-orm";
-import WebSocket from "ws"; // Assuming wss is a WebSocket server instance
+import { WebSocketServer } from "ws";
 
 // Mock WebSocket server for demonstration purposes
-const wss = new WebSocket.Server({ noServer: true });
+const wss = new WebSocketServer({ noServer: true });
 
 // XP and Level Constants
 const XP_PER_STUDY_MINUTE = 2; // 2 XP per minute of study

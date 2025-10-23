@@ -3,8 +3,10 @@ import type { Server as HttpServer } from "http";
 
 const clients = new Set<WebSocket>();
 
+let wss: WebSocketServer;
+
 export function setupWebSocket(server: HttpServer) {
-  const wss = new WebSocketServer({ server, path: "/ws" });
+  wss = new WebSocketServer({ server, path: "/ws" });
 
   wss.on("connection", (ws) => {
     clients.add(ws);
@@ -110,3 +112,5 @@ export function broadcastPointsEarned(userId: string, points: number, activity: 
     }
   });
 }
+
+export { wss };
