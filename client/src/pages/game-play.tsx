@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/lib/auth";
 import { useCompleteGame, useGame } from "@/lib/api-hooks";
 import { useToast } from "@/hooks/use-toast";
+import { MathChallengeGame, type Difficulty } from "@/components/games/MathChallengeGame";
 
 export default function GamePlay() {
   const [, params] = useRoute("/games/:gameId");
@@ -75,13 +76,16 @@ export default function GamePlay() {
   } : null;
 
   useEffect(() => {
+    // Skip timer for math-quiz as MathChallengeGame handles its own timing
+    if (gameId === "math-quiz") return;
+    
     if (gameState === "playing" && timeLeft > 0) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
     } else if (timeLeft === 0 && gameState === "playing") {
       handleAnswer(null);
     }
-  }, [timeLeft, gameState]);
+  }, [timeLeft, gameState, gameId]);
 
   const startGame = () => {
     setGameState("playing");
@@ -180,11 +184,63 @@ export default function GamePlay() {
 
   const question = game.questions[currentQuestion];
 
+  // Handle Math Challenge Game separately
+  const handleMathChallengeComplete = async (score: number, timeElapsed: number) => {
+    setScore(score);
+    setGameState("finished");
+    
+    if (user && gameId) {
+      try {
+        const result = await completeGameMutation.mutateAsync({
+          gameId,
+          userId: user.id,
+          score,
+        });
+        
+        setPointsEarned(result.pointsEarned);
+        
+        toast({
+          title: "Game Complete!",
+          description: `You earned ${result.pointsEarned} points!`,
+        });
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: "Failed to save your score",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const handleMathChallengeExit = () => {
+    setGameState("intro");
+  };
+
+  // Determine difficulty based on game difficulty
+  const getDifficultyLevel = (): Difficulty => {
+    if (game.difficulty === "Medium") return "medium";
+    if (game.difficulty === "Hard") return "hard";
+    return "easy";
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">
-          {gameState === "intro" && (
+          {/* Render Math Challenge Game for math-quiz */}
+          {gameId === "math-quiz" && gameState === "playing" && (
+            <MathChallengeGame
+              difficulty={getDifficultyLevel()}
+              numberOfQuestions={10}
+              timeLimit={60}
+              onComplete={handleMathChallengeComplete}
+              onExit={handleMathChallengeExit}
+            />
+          )}
+
+          {/* Only show intro/finished for math-quiz, regular gameplay for others */}
+          {(gameId !== "math-quiz" || gameState !== "playing") && gameState === "intro" && (
             <Card>
               <CardHeader className="text-center">
                 <div className="flex justify-center mb-4">
@@ -243,7 +299,7 @@ export default function GamePlay() {
             </Card>
           )}
 
-          {gameState === "playing" && (
+          {gameId !== "math-quiz" && gameState === "playing" && (
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between mb-4">
