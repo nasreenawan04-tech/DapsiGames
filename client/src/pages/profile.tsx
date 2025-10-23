@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User, Award, Trophy, TrendingUp, Calendar, Settings, Camera, Users, UserPlus, Check, X, Search } from "lucide-react";
+import { User, Award, Trophy, TrendingUp, Calendar, Settings, Camera, Users, UserPlus, Check, X, Search, Flame, Target } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
-import { useAchievements, useActivities, useUpdateProfile, useFriends, useFriendRequests, useSendFriendRequest, useAcceptFriendRequest, useRejectFriendRequest, useRemoveFriend, useSearchUsers } from "@/lib/api-hooks";
+import { useAchievements, useActivities, useUpdateProfile, useFriends, useFriendRequests, useSendFriendRequest, useAcceptFriendRequest, useRejectFriendRequest, useRemoveFriend, useSearchUsers, useStreak } from "@/lib/api-hooks";
 import { formatDistanceToNow, format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,6 +27,7 @@ export default function Profile() {
   const { data: activities = [], isLoading: activitiesLoading } = useActivities(user?.id);
   const { data: friends = [], isLoading: friendsLoading } = useFriends(user?.id);
   const { data: friendRequests = [], isLoading: requestsLoading } = useFriendRequests(user?.id);
+  const { data: streak } = useStreak(user?.id);
   const updateProfile = useUpdateProfile();
   const sendRequest = useSendFriendRequest();
   const acceptRequest = useAcceptFriendRequest();
@@ -269,6 +270,51 @@ export default function Profile() {
             </div>
           </CardContent>
         </Card>
+
+        {streak && (
+          <Card className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-500/20">
+            <CardContent className="p-6">
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-4 rounded-full bg-gradient-to-br from-orange-500 to-red-500">
+                    <Flame className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Current Streak</p>
+                    <p className="text-3xl font-bold">
+                      {streak.currentStreak} <span className="text-lg text-muted-foreground">days</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="p-4 rounded-full bg-gradient-to-br from-primary to-secondary">
+                    <Target className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Longest Streak</p>
+                    <p className="text-3xl font-bold">
+                      {streak.longestStreak} <span className="text-lg text-muted-foreground">days</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+              {streak.lastStudyDate && (
+                <div className="mt-4 pt-4 border-t border-orange-500/20">
+                  <p className="text-sm text-muted-foreground">
+                    Last active: {formatDistanceToNow(new Date(streak.lastStudyDate), { addSuffix: true })}
+                  </p>
+                </div>
+              )}
+              <div className="mt-4">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-muted-foreground">Progress to next milestone</span>
+                  <span className="font-semibold">{streak.currentStreak % 7}/7 days</span>
+                </div>
+                <Progress value={(streak.currentStreak % 7) * 14.28} className="h-2" />
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs defaultValue="achievements" className="space-y-6">
           <TabsList className="grid w-full max-w-2xl grid-cols-3">

@@ -142,6 +142,14 @@ export function useSearchUsers(query: string) {
   });
 }
 
+// Streak hooks
+export function useStreak(userId: string | null | undefined) {
+  return useQuery<any>({
+    queryKey: ["/api/streaks", userId],
+    enabled: !!userId,
+  });
+}
+
 // Game hooks
 export function useGames() {
   return useQuery<Game[]>({

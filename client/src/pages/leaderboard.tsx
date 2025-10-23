@@ -1,9 +1,11 @@
-import { Trophy, Medal, Search, Loader2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Trophy, Medal, Search, Loader2, Users, Globe } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -11,12 +13,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useLeaderboard } from "@/lib/api-hooks";
+import { useLeaderboard, useFriends } from "@/lib/api-hooks";
 import { useAuth } from "@/lib/auth";
 
 export default function Leaderboard() {
   const { data: leaderboardData, isLoading } = useLeaderboard();
   const { user } = useAuth();
+  const { data: friends = [] } = useFriends(user?.id);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"global" | "friends">("global");
+  const [displayLimit, setDisplayLimit] = useState(20);
+
+  const filteredUsers = useMemo(() => {
+    let users = leaderboardData || [];
+    
+    if (viewMode === "friends") {
+      const friendIds = friends.map((f: any) => f.userId);
+      users = users.filter(u => friendIds.includes(u.id) || u.id === user?.id);
+    }
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      users = users.filter(u => 
+        u.fullName.toLowerCase().includes(query) ||
+        u.email?.toLowerCase().includes(query)
+      );
+    }
+    
+    return users;
+  }, [leaderboardData, viewMode, searchQuery, friends, user?.id]);
 
   if (isLoading) {
     return (
@@ -26,9 +51,10 @@ export default function Leaderboard() {
     );
   }
 
-  const allUsers = leaderboardData || [];
-  const topUsers = allUsers.slice(0, 3);
-  const otherUsers = allUsers.slice(3);
+  const displayedUsers = filteredUsers.slice(0, displayLimit);
+  const topUsers = displayedUsers.slice(0, 3);
+  const otherUsers = displayedUsers.slice(3);
+  const hasMore = filteredUsers.length > displayLimit;
 
 
   return (
@@ -40,41 +66,34 @@ export default function Leaderboard() {
             Leaderboard
           </h1>
           <p className="text-muted-foreground">
-            See how you rank against other learners around the world
+            See how you rank against other learners {viewMode === "friends" ? "and your friends" : "around the world"}
           </p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4 mb-8">
+        <div className="flex flex-col gap-4 mb-8">
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "global" | "friends")} className="w-full">
+            <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsTrigger value="global" data-testid="tab-global">
+                <Globe className="h-4 w-4 mr-2" />
+                Global
+              </TabsTrigger>
+              <TabsTrigger value="friends" data-testid="tab-friends">
+                <Users className="h-4 w-4 mr-2" />
+                Friends {friends.length > 0 && `(${friends.length})`}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search for a user..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
               data-testid="input-search"
             />
           </div>
-          <Select defaultValue="all-time">
-            <SelectTrigger className="md:w-48" data-testid="select-timeframe">
-              <SelectValue placeholder="Time period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="week">This Week</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="all-time">All Time</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select defaultValue="all">
-            <SelectTrigger className="md:w-48" data-testid="select-category">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              <SelectItem value="math">Mathematics</SelectItem>
-              <SelectItem value="science">Science</SelectItem>
-              <SelectItem value="language">Language</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
         <div className="grid md:grid-cols-3 gap-4 mb-8">
@@ -156,11 +175,25 @@ export default function Leaderboard() {
               ))}
             </div>
 
-            <div className="mt-6 text-center">
-              <Button variant="outline" data-testid="button-load-more">
-                Load More
-              </Button>
-            </div>
+            {hasMore && (
+              <div className="mt-6 text-center">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setDisplayLimit(limit => limit + 20)}
+                  data-testid="button-load-more"
+                >
+                  Load More
+                </Button>
+              </div>
+            )}
+            
+            {filteredUsers.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                {searchQuery ? "No users found matching your search" : 
+                  viewMode === "friends" ? "No friends to display. Add friends to see them here!" :
+                  "No users to display"}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
