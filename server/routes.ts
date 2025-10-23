@@ -67,9 +67,9 @@ import {
   getLevelFromXP,
   broadcastPointsEarned,
 } from "./services/gamification";
-import { eq, desc, sql, inArray } from "drizzle-orm";
+import { eq, desc, sql, inArray, and } from "drizzle-orm";
 import bcrypt from "bcrypt";
-import { setupWebSocket, broadcastLeaderboardUpdate } from "./websocket";
+import { setupWebSocket, broadcastLeaderboardUpdate, wss } from "./websocket";
 import { healthCheck } from "./middleware/health";
 import { cacheMiddleware } from "./middleware/cache";
 import { validateRegistration, validateLogin } from "./middleware/validation";
@@ -409,44 +409,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== Friend System Routes =====
 
   // Send friend request
-  app.post("/api/friends/request", async (req, res) => {
+  app.post("/api/friends/request", async (req, res, next) => {
     try {
       const { userId, friendId } = req.body;
 
       if (!userId || !friendId) {
-        return res.status(400).json({ error: "User ID and Friend ID required" });
+        return res.status(400).send({ message: "userId and friendId are required" });
       }
 
       if (userId === friendId) {
-        return res.status(400).json({ error: "Cannot send friend request to yourself" });
+        return res.status(400).send({ message: "Cannot send friend request to yourself" });
       }
 
-      // Verify both users exist
-      const user = await storage.getUser(userId);
-      const friend = await storage.getUser(friendId);
+      // Check if users exist
+      const user = await storage.getUserById(userId);
+      const friend = await storage.getUserById(friendId);
 
       if (!user || !friend) {
-        return res.status(404).json({ error: "User not found" });
+        return res.status(404).send({ message: "User not found" });
       }
 
       // Check if friendship already exists
-      const existingFriendships = await storage.getUserFriendships(userId);
-      const existing = existingFriendships.find(
-        (f) => 
-          (f.userId === userId && f.friendId === friendId) ||
-          (f.userId === friendId && f.friendId === userId)
-      );
-
+      const existing = await storage.checkFriendship(userId, friendId);
       if (existing) {
-        return res.status(400).json({ error: "Friend request already exists" });
+        return res.status(400).send({ message: "Friend request already exists" });
       }
 
-      const friendship = await storage.createFriendship({ userId, friendId });
+      const friendship = await storage.createFriendRequest(userId, friendId);
+
+      // Create notification activity for the friend
+      await storage.createActivity({
+        userId: friendId,
+        activityType: "friend_request",
+        title: `${user.fullName} sent you a friend request`,
+        points: 0,
+      });
 
       res.json(friendship);
-    } catch (error: any) {
-      console.error("Error sending friend request:", error);
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      next(error);
     }
   });
 
@@ -604,33 +605,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== Social Groups Routes =====
 
   // Create a new group
-  app.post("/api/groups", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).send({ error: "Unauthorized" });
-    }
-
+  app.post("/api/groups", async (req, res, next) => {
     try {
-      const { name, description, ownerId, isPublic } = req.body;
+      const { name, description, isPublic, ownerId } = req.body;
 
       if (!name || !ownerId) {
-        return res.status(400).send({ error: "Missing required fields" });
+        return res.status(400).send({ message: "name and ownerId are required" });
       }
 
-      // Create the group
+      if (name.trim().length < 3) {
+        return res.status(400).send({ message: "Group name must be at least 3 characters long" });
+      }
+
+      // Validate owner exists
+      const owner = await storage.getUserById(ownerId);
+      if (!owner) {
+        return res.status(404).send({ message: "Owner user not found" });
+      }
+
       const group = await storage.createGroup({
-        name,
-        description,
+        name: name.trim(),
+        description: description?.trim() || null,
+        isPublic: isPublic ?? true,
         ownerId,
-        isPublic: isPublic !== undefined ? isPublic : true,
       });
 
-      // Add creator as owner member
-      await storage.joinGroup(group.id, ownerId, "owner");
+      // Automatically add owner as a member with 'owner' role
+      await storage.joinGroup(group.id, ownerId);
+      await db.update(groupMembers)
+        .set({ role: 'owner' })
+        .where(and(
+          eq(groupMembers.groupId, group.id),
+          eq(groupMembers.userId, ownerId)
+        ));
+
+      // Create activity
+      await storage.createActivity({
+        userId: ownerId,
+        activityType: "group_created",
+        title: `Created group: ${group.name}`,
+        points: 50,
+      });
+
+      // Update user XP for creating group
+      await storage.updateUserPoints(ownerId, owner.totalXp + 50);
 
       res.json(group);
-    } catch (error: any) {
-      console.error("Error creating group:", error);
-      res.status(500).send({ error: error.message });
+    } catch (error) {
+      next(error);
     }
   });
 
@@ -1584,35 +1606,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/study-sessions/:sessionId/complete", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).send({ error: "Unauthorized" });
-    }
-
+  app.patch("/api/study-sessions/:id/complete", async (req, res, next) => {
     try {
-      const { sessionId } = req.params;
+      const sessionId = req.params.id;
       const session = await storage.completeStudySession(sessionId);
 
       if (!session) {
-        return res.status(404).send({ error: "Session not found" });
+        return res.status(404).send({ message: "Session not found" });
       }
 
       // Update user XP
-      const user = await storage.getUser(session.userId);
+      const user = await storage.getUserById(session.userId);
       if (user) {
-        await storage.addUserPoints(session.userId, session.xpEarned);
+        const newTotalXp = user.totalXp + session.xpEarned;
+        await storage.updateUserPoints(session.userId, newTotalXp);
 
-        // Update streak
-        await storage.updateStreak(session.userId);
-
-        // Broadcast points update
-        broadcastPointsEarned(session.userId, session.xpEarned, "Completed study session");
+        // Check for level up
+        const newLevel = Math.floor(newTotalXp / 1000) + 1;
+        if (newLevel > user.level) {
+          await db.update(users)
+            .set({ level: newLevel })
+            .where(eq(users.id, session.userId));
+        }
       }
 
+      // Update streak
+      await updateStreak(session.userId);
+
+      // Record activity
+      await storage.createActivity({
+        userId: session.userId,
+        activityType: "study_session",
+        title: `Completed ${session.duration} minute study session`,
+        points: session.xpEarned,
+      });
+
+      // Broadcast to WebSocket clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({
+            type: "study_session_completed",
+            userId: session.userId,
+            xpEarned: session.xpEarned,
+          }));
+        }
+      });
+
       res.json(session);
-    } catch (error: any) {
-      console.error("Error completing study session:", error);
-      res.status(500).send({ error: error.message });
+    } catch (error) {
+      next(error);
     }
   });
 
@@ -1633,33 +1675,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/tasks", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).send({ error: "Unauthorized" });
-    }
-
+  app.post("/api/tasks", async (req, res, next) => {
     try {
-      const { userId, title, description, category, priority, deadline, xpReward, bonusXp } = req.body;
+      const taskData = insertTaskSchema.parse(req.body);
 
-      if (!userId || !title || !category || !priority) {
-        return res.status(400).send({ error: "Missing required fields" });
+      // Validate user exists
+      const user = await storage.getUserById(taskData.userId);
+      if (!user) {
+        return res.status(404).send({ message: "User not found" });
       }
 
+      // Calculate XP rewards based on priority
+      const xpReward = taskData.priority === "high" ? 30 : taskData.priority === "medium" ? 20 : 10;
+      const bonusXp = taskData.deadline ? 10 : 0;
+
       const task = await storage.createTask({
-        userId,
-        title,
-        description,
-        category,
-        priority,
-        deadline: deadline ? new Date(deadline) : null,
-        xpReward: xpReward || 10,
-        bonusXp: bonusXp || 0,
+        ...taskData,
+        xpReward,
+        bonusXp,
+      });
+
+      // Create activity
+      await storage.createActivity({
+        userId: taskData.userId,
+        activityType: "task_created",
+        title: `Created task: ${taskData.title}`,
+        points: 0,
       });
 
       res.json(task);
-    } catch (error: any) {
-      console.error("Error creating task:", error);
-      res.status(500).send({ error: error.message });
+    } catch (error) {
+      next(error);
     }
   });
 

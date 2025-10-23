@@ -136,6 +136,11 @@ export interface IStorage {
   completeTask(taskId: string): Promise<Task | null>;
   deleteTask(taskId: string): Promise<void>;
   completeStudySession(sessionId: string): Promise<StudySession | null>;
+
+  // Pomodoro Timer methods (assuming these would be added to IStorage)
+  getStudySessionByUserIdAndStatus(userId: string, completed: boolean): Promise<StudySession | undefined>;
+  startStudySession(userId: string, durationMinutes: number): Promise<StudySession>;
+  stopStudySession(sessionId: string, xpEarned: number): Promise<StudySession | null>;
 }
 
 export class MemStorage implements IStorage {
@@ -155,6 +160,8 @@ export class MemStorage implements IStorage {
   private groups: Map<string, Group>;
   private groupMembers: Map<string, GroupMember>;
   private streaks: Map<string, Streak>;
+  // Added for group messages, assuming GroupMessage type exists in @shared/schema
+  private groupMessages: Map<string, any>; // Replace 'any' with actual GroupMessage type
 
   constructor() {
     this.users = new Map();
@@ -173,6 +180,7 @@ export class MemStorage implements IStorage {
     this.groups = new Map();
     this.groupMembers = new Map();
     this.streaks = new Map();
+    this.groupMessages = new Map(); // Initialize group messages map
 
     this.seedInitialData();
   }
@@ -649,7 +657,7 @@ export class MemStorage implements IStorage {
     return this.groups.get(id);
   }
 
-  async getAllGroups(): Promise<Group[]<bos>> {
+  async getAllGroups(): Promise<Group[]> {
     return Array.from(this.groups.values());
   }
 
@@ -749,7 +757,54 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
-  // New methods for friends, tasks, study sessions
+  // Pomodoro Timer methods
+  async getStudySessionByUserIdAndStatus(userId: string, completed: boolean): Promise<StudySession | undefined> {
+    return Array.from(this.studySessions.values()).find(
+      (session) => session.userId === userId && session.completed === completed
+    );
+  }
+
+  async startStudySession(userId: string, durationMinutes: number): Promise<StudySession> {
+    const id = randomUUID();
+    const session: StudySession = {
+      id,
+      userId,
+      duration: durationMinutes,
+      xpEarned: 0,
+      completed: false,
+      startedAt: new Date(),
+      completedAt: null,
+    };
+    this.studySessions.set(id, session);
+    return session;
+  }
+
+  async stopStudySession(sessionId: string, xpEarned: number): Promise<StudySession | null> {
+    const session = this.studySessions.get(sessionId);
+    if (!session) return null;
+
+    const updated: StudySession = {
+      ...session,
+      completed: true,
+      completedAt: new Date(),
+      xpEarned,
+    };
+    this.studySessions.set(sessionId, updated);
+
+    // Update user stats and streak
+    const userStats = await this.getUserStats(session.userId);
+    if (userStats) {
+      await this.updateUserStats(session.userId, {
+        studySessions: userStats.studySessions + 1,
+        totalPoints: userStats.totalPoints + xpEarned,
+      });
+    }
+    await this.updateStreak(session.userId); // This method will handle the logic for updating streak
+
+    return updated;
+  }
+
+  // Existing methods for friends, tasks, study sessions
   async getUserStudySessions(userId: string): Promise<StudySession[]> {
     return Array.from(this.studySessions.values()).filter(
       (session) => session.userId === userId
@@ -782,6 +837,17 @@ export class MemStorage implements IStorage {
       xpEarned,
     };
     this.studySessions.set(sessionId, updated);
+
+    // Update user stats and streak
+    const userStats = await this.getUserStats(session.userId);
+    if (userStats) {
+      await this.updateUserStats(session.userId, {
+        studySessions: userStats.studySessions + 1,
+        totalPoints: userStats.totalPoints + xpEarned,
+      });
+    }
+    await this.updateStreak(session.userId);
+
     return updated;
   }
 
@@ -837,6 +903,15 @@ export class MemStorage implements IStorage {
   }
 
   async createFriendRequest(userId: string, friendId: string): Promise<Friendship> {
+    // Check if friendship already exists or if it's a request to self
+    const existingFriendship = await this.checkFriendship(userId, friendId);
+    if (existingFriendship) {
+      throw new Error("Friendship or request already exists.");
+    }
+    if (userId === friendId) {
+      throw new Error("Cannot send friend request to yourself.");
+    }
+
     const id = randomUUID();
     const friendship: Friendship = {
       id,
@@ -852,7 +927,8 @@ export class MemStorage implements IStorage {
 
   async acceptFriendRequest(requestId: string): Promise<Friendship | null> {
     const friendship = this.friendships.get(requestId);
-    if (!friendship) return null;
+    if (!friendship || friendship.status !== "pending") return null;
+
     const updated: Friendship = {
       ...friendship,
       status: "accepted",
@@ -864,7 +940,8 @@ export class MemStorage implements IStorage {
 
   async rejectFriendRequest(requestId: string): Promise<Friendship | null> {
     const friendship = this.friendships.get(requestId);
-    if (!friendship) return null;
+    if (!friendship || friendship.status !== "pending") return null;
+
     const updated: Friendship = {
       ...friendship,
       status: "rejected",
@@ -877,14 +954,15 @@ export class MemStorage implements IStorage {
   async removeFriend(userId: string, friendId: string): Promise<void> {
     const friendship = Array.from(this.friendships.values()).find(
       (f) =>
-        (f.userId === userId && f.friendId === friendId) ||
-        (f.userId === friendId && f.friendId === userId)
+        (f.userId === userId && f.friendId === friendId && f.status === "accepted") ||
+        (f.userId === friendId && f.friendId === userId && f.status === "accepted")
     );
     if (friendship) {
       this.friendships.delete(friendship.id);
     }
   }
 
+  // Create Task method
   async createTask(data: InsertTask): Promise<Task> {
     const id = randomUUID();
     const task: Task = {
@@ -898,6 +976,7 @@ export class MemStorage implements IStorage {
     return task;
   }
 
+  // Update Task method
   async updateTask(taskId: string, data: Partial<InsertTask>): Promise<Task | null> {
     const task = this.tasks.get(taskId);
     if (!task) return null;
@@ -909,6 +988,7 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
+  // Complete Task method
   async completeTask(taskId: string): Promise<Task | null> {
     const task = this.tasks.get(taskId);
     if (!task) return null;
@@ -921,10 +1001,12 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
+  // Delete Task method
   async deleteTask(taskId: string): Promise<void> {
     this.tasks.delete(taskId);
   }
 
+  // Method to update streak, called after study sessions or tasks are completed
   async updateStreak(userId: string): Promise<void> {
     const existing = await this.getUserStreak(userId);
     const today = new Date();
@@ -937,7 +1019,7 @@ export class MemStorage implements IStorage {
         userId,
         currentStreak: 1,
         longestStreak: 1,
-        lastStudyDate: new Date(),
+        lastStudyDate: new Date(), // Initialize with today
         updatedAt: new Date(),
       };
       this.streaks.set(id, streak);
@@ -948,7 +1030,13 @@ export class MemStorage implements IStorage {
         const daysDiff = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
 
         if (daysDiff === 0) {
-          // Same day, no change
+          // Same day, no change needed for streak count, update lastStudyDate if needed
+          const updated: Streak = {
+            ...existing,
+            lastStudyDate: new Date(), // Update to latest activity date
+            updatedAt: new Date(),
+          };
+          this.streaks.set(existing.id, updated);
           return;
         } else if (daysDiff === 1) {
           // Consecutive day
@@ -971,8 +1059,36 @@ export class MemStorage implements IStorage {
           };
           this.streaks.set(existing.id, updated);
         }
+      } else {
+        // If lastStudyDate is null, treat it as the start of a new streak
+        const updated: Streak = {
+          ...existing,
+          currentStreak: 1,
+          longestStreak: Math.max(1, existing.longestStreak),
+          lastStudyDate: new Date(),
+          updatedAt: new Date(),
+        };
+        this.streaks.set(existing.id, updated);
       }
     }
+  }
+
+  // Placeholder for Group Message methods, assuming GroupMessage and InsertGroupMessage types exist
+  async getGroupMessages(groupId: string): Promise<any[]> { // Replace 'any[]' with actual GroupMessage[] type
+    return Array.from(this.groupMessages.values())
+      .filter((msg) => msg.groupId === groupId)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
+  async sendGroupMessage(data: any): Promise<any> { // Replace 'any' with InsertGroupMessage and GroupMessage types
+    const id = randomUUID();
+    const message = {
+      ...data,
+      id,
+      createdAt: new Date(),
+    };
+    this.groupMessages.set(id, message);
+    return message;
   }
 }
 
