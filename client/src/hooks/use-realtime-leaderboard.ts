@@ -41,7 +41,7 @@ export function useRealtimeLeaderboard() {
             },
             async (payload) => {
               console.log('Leaderboard update received:', payload);
-
+              
               // Refetch leaderboard when user_stats changes
               const response = await fetch('/api/leaderboard?limit=100');
               if (response.ok) {
