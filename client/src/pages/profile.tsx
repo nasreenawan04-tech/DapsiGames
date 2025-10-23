@@ -30,6 +30,8 @@ export default function Profile() {
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editedName, setEditedName] = useState("");
+  const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState("");
 
   if (!user) {
     return null;
@@ -38,6 +40,11 @@ export default function Profile() {
   const handleEditProfile = () => {
     setEditedName(user.fullName);
     setIsEditDialogOpen(true);
+  };
+
+  const handleChangeAvatar = () => {
+    setAvatarUrl(user.avatarUrl || "");
+    setIsAvatarDialogOpen(true);
   };
 
   const handleSaveProfile = async () => {
@@ -66,6 +73,41 @@ export default function Profile() {
       toast({
         title: "Error",
         description: error.message || "Failed to update profile",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveAvatar = async () => {
+    const trimmedUrl = avatarUrl.trim();
+    
+    if (trimmedUrl.length > 0) {
+      try {
+        new URL(trimmedUrl);
+      } catch {
+        toast({
+          title: "Invalid URL",
+          description: "Please enter a valid image URL",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
+    try {
+      await updateProfile.mutateAsync({
+        userId: user.id,
+        avatarUrl: trimmedUrl,
+      });
+      toast({
+        title: "Avatar updated",
+        description: "Your profile picture has been updated successfully.",
+      });
+      setIsAvatarDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update avatar",
         variant: "destructive",
       });
     }
@@ -107,7 +149,7 @@ export default function Profile() {
                   variant="secondary"
                   className="absolute bottom-0 right-0 h-8 w-8 rounded-full"
                   data-testid="button-change-avatar"
-                  disabled
+                  onClick={handleChangeAvatar}
                 >
                   <Camera className="h-4 w-4" />
                 </Button>
@@ -298,6 +340,56 @@ export default function Profile() {
               data-testid="button-save-profile"
             >
               {updateProfile.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAvatarDialogOpen} onOpenChange={setIsAvatarDialogOpen}>
+        <DialogContent data-testid="dialog-change-avatar">
+          <DialogHeader>
+            <DialogTitle>Change Profile Picture</DialogTitle>
+            <DialogDescription>
+              Enter a URL for your profile picture. You can use image hosting services like Gravatar or Imgur.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="avatarUrl">Image URL</Label>
+              <Input
+                id="avatarUrl"
+                placeholder="https://example.com/avatar.jpg"
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                data-testid="input-avatar-url"
+              />
+              <p className="text-sm text-muted-foreground">
+                Leave empty to remove your profile picture
+              </p>
+            </div>
+            {avatarUrl && (
+              <div className="flex justify-center">
+                <Avatar className="h-24 w-24">
+                  <AvatarImage src={avatarUrl} alt="Preview" />
+                  <AvatarFallback>Preview</AvatarFallback>
+                </Avatar>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsAvatarDialogOpen(false)}
+              data-testid="button-cancel-avatar"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveAvatar}
+              disabled={updateProfile.isPending}
+              data-testid="button-save-avatar"
+            >
+              {updateProfile.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
