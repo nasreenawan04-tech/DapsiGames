@@ -72,6 +72,7 @@ import { setupWebSocket, broadcastLeaderboardUpdate } from "./websocket";
 import { healthCheck } from "./middleware/health";
 import { cacheMiddleware } from "./middleware/cache";
 import { validateRegistration, validateLogin } from "./middleware/validation";
+import { requireAuth, optionalAuth, type AuthRequest } from "./middleware/auth";
 
 const SALT_ROUNDS = 10;
 
@@ -2539,6 +2540,182 @@ export async function registerRoutes(app: Express): Promise<Server> {
         challenge,
         progress,
       });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== Stripe Payment & Subscription Routes =====
+  // Referenced from blueprint:javascript_stripe
+  
+  // Create payment intent for one-time payments
+  app.post("/api/create-payment-intent", async (req: Request, res: Response) => {
+    try {
+      if (!process.env.STRIPE_SECRET_KEY) {
+        return res.status(503).json({ 
+          error: "Payment service not configured. Please add STRIPE_SECRET_KEY to environment variables." 
+        });
+      }
+
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+        apiVersion: "2025-09-30.clover",
+      });
+
+      const { amount } = req.body;
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount * 100),
+        currency: "usd",
+      });
+
+      res.json({ clientSecret: paymentIntent.client_secret });
+    } catch (error: any) {
+      res.status(500).json({ error: "Error creating payment intent: " + error.message });
+    }
+  });
+
+  // Get or create subscription for Pro membership
+  app.post("/api/get-or-create-subscription", requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!process.env.STRIPE_SECRET_KEY) {
+        return res.status(503).json({ 
+          error: "Payment service not configured. Please add STRIPE_SECRET_KEY and STRIPE_PRICE_ID to environment variables." 
+        });
+      }
+
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+        apiVersion: "2025-09-30.clover",
+      });
+
+      // Get authenticated user from request
+      const userId = req.userId!;
+      
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // If user already has a subscription, return existing
+      if (user.stripeSubscriptionId) {
+        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+        
+        const latestInvoice = typeof subscription.latest_invoice === 'string'
+          ? await stripe.invoices.retrieve(subscription.latest_invoice)
+          : subscription.latest_invoice;
+
+        let paymentIntent: any = null;
+        if (latestInvoice) {
+          const invoice = latestInvoice as any;
+          paymentIntent = typeof invoice.payment_intent === 'string'
+            ? await stripe.paymentIntents.retrieve(invoice.payment_intent)
+            : invoice.payment_intent;
+        }
+
+        return res.json({
+          subscriptionId: subscription.id,
+          clientSecret: paymentIntent?.client_secret,
+        });
+      }
+
+      // Create new customer if needed
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: user.fullName,
+        });
+        customerId = customer.id;
+
+        await db
+          .update(users)
+          .set({ stripeCustomerId: customerId })
+          .where(eq(users.id, user.id));
+      }
+
+      if (!process.env.STRIPE_PRICE_ID) {
+        return res.status(503).json({ 
+          error: "Subscription price not configured. Please add STRIPE_PRICE_ID to environment variables." 
+        });
+      }
+
+      // Create subscription
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: process.env.STRIPE_PRICE_ID }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: { save_default_payment_method: 'on_subscription' },
+        expand: ['latest_invoice.payment_intent'],
+      });
+
+      // Update user with subscription info
+      await db
+        .update(users)
+        .set({ 
+          stripeSubscriptionId: subscription.id,
+          subscriptionStatus: subscription.status,
+        })
+        .where(eq(users.id, user.id));
+
+      const latestInvoice = subscription.latest_invoice as any;
+      const paymentIntent = latestInvoice?.payment_intent;
+
+      res.json({
+        subscriptionId: subscription.id,
+        clientSecret: paymentIntent?.client_secret,
+      });
+    } catch (error: any) {
+      console.error("Subscription error:", error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Webhook handler for Stripe events
+  app.post("/api/stripe-webhook", async (req: Request, res: Response) => {
+    try {
+      if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
+        return res.status(503).json({ error: "Stripe webhook not configured" });
+      }
+
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+        apiVersion: "2025-09-30.clover",
+      });
+
+      const sig = req.headers['stripe-signature'] as string;
+      let event;
+
+      try {
+        event = stripe.webhooks.constructEvent(
+          req.rawBody as Buffer,
+          sig,
+          process.env.STRIPE_WEBHOOK_SECRET
+        );
+      } catch (err: any) {
+        return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+      }
+
+      // Handle the event
+      switch (event.type) {
+        case 'customer.subscription.updated':
+        case 'customer.subscription.deleted':
+          const subscription = event.data.object as any;
+          await db
+            .update(users)
+            .set({
+              subscriptionStatus: subscription.status,
+              isPro: subscription.status === 'active',
+            })
+            .where(eq(users.stripeSubscriptionId, subscription.id));
+          break;
+      }
+
+      res.json({ received: true });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

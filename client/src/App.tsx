@@ -32,6 +32,7 @@ import {
   LazyPlanner,
 } from "@/lib/lazy-components";
 import Leaderboard from "@/pages/leaderboard";
+import Subscribe from "@/pages/subscribe";
 
 function Router() {
   const { user, logout } = useAuth();
@@ -82,6 +83,9 @@ function Router() {
             </Route>
             <Route path="/groups">
               {() => <ProtectedRoute><LazyGroups /></ProtectedRoute>}
+            </Route>
+            <Route path="/subscribe">
+              {() => <ProtectedRoute><Subscribe /></ProtectedRoute>}
             </Route>
             <Route path="/guest" component={LazyGuest} />
             <Route component={NotFound} />
