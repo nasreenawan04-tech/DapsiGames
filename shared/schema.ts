@@ -193,3 +193,106 @@ export const insertUserProgressSchema = createInsertSchema(userProgress).omit({
 
 export type InsertUserProgress = z.infer<typeof insertUserProgressSchema>;
 export type UserProgress = typeof userProgress.$inferSelect;
+
+// Study Sessions table - tracks Pomodoro timer sessions
+export const studySessions = pgTable("study_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  duration: integer("duration").notNull(), // in minutes
+  xpEarned: integer("xp_earned").notNull().default(0),
+  ambientSound: text("ambient_sound"), // 'forest', 'rain', 'cafe', 'silence'
+  completed: boolean("completed").notNull().default(false),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertStudySessionSchema = createInsertSchema(studySessions).omit({
+  id: true,
+  xpEarned: true,
+  completed: true,
+  startedAt: true,
+  completedAt: true,
+});
+
+export type InsertStudySession = z.infer<typeof insertStudySessionSchema>;
+export type StudySession = typeof studySessions.$inferSelect;
+
+// Tasks table - user study goals and tasks
+export const tasks = pgTable("tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // 'study', 'homework', 'reading', 'practice'
+  priority: text("priority").notNull().default('medium'), // 'low', 'medium', 'high'
+  deadline: timestamp("deadline"),
+  completed: boolean("completed").notNull().default(false),
+  xpReward: integer("xp_reward").notNull().default(10),
+  bonusXp: integer("bonus_xp").notNull().default(0), // for early completion
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const insertTaskSchema = createInsertSchema(tasks).omit({
+  id: true,
+  completed: true,
+  bonusXp: true,
+  createdAt: true,
+  completedAt: true,
+});
+
+export type InsertTask = z.infer<typeof insertTaskSchema>;
+export type Task = typeof tasks.$inferSelect;
+
+// Streaks table - tracks daily study streaks
+export const streaks = pgTable("streaks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  currentStreak: integer("current_streak").notNull().default(0),
+  longestStreak: integer("longest_streak").notNull().default(0),
+  lastStudyDate: timestamp("last_study_date"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertStreakSchema = createInsertSchema(streaks).omit({
+  id: true,
+  currentStreak: true,
+  longestStreak: true,
+  updatedAt: true,
+});
+
+export type InsertStreak = z.infer<typeof insertStreakSchema>;
+export type Streak = typeof streaks.$inferSelect;
+
+// Badges table - defines available badges
+export const badges = pgTable("badges", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  icon: text("icon").notNull(), // lucide icon name or emoji
+  requirement: text("requirement").notNull(), // e.g., '5-day-streak', 'early-riser', 'focus-master'
+  category: text("category").notNull(), // 'streak', 'achievement', 'milestone'
+});
+
+export const insertBadgeSchema = createInsertSchema(badges).omit({
+  id: true,
+});
+
+export type InsertBadge = z.infer<typeof insertBadgeSchema>;
+export type Badge = typeof badges.$inferSelect;
+
+// User Badges table - junction table for earned badges
+export const userBadges = pgTable("user_badges", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  badgeId: varchar("badge_id").notNull().references(() => badges.id, { onDelete: "cascade" }),
+  earnedAt: timestamp("earned_at").notNull().defaultNow(),
+});
+
+export const insertUserBadgeSchema = createInsertSchema(userBadges).omit({
+  id: true,
+  earnedAt: true,
+});
+
+export type InsertUserBadge = z.infer<typeof insertUserBadgeSchema>;
+export type UserBadge = typeof userBadges.$inferSelect;
