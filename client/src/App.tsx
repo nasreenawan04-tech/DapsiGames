@@ -20,13 +20,13 @@ import ResetPassword from "@/pages/reset-password";
 
 import {
   LazyDashboard,
-  LazyLeaderboard,
   LazyProfile,
   LazyGames,
   LazyGamePlay,
   LazyStudy,
   LazyGuest,
 } from "@/lib/lazy-components";
+import LeaderboardSimple from "@/pages/leaderboard-simple";
 
 function Router() {
   const { user, logout } = useAuth();
@@ -53,7 +53,7 @@ function Router() {
             <Route path="/auth/callback" component={AuthCallback} />
             <Route path="/auth/reset-password" component={ResetPassword} />
             <Route path="/dashboard" component={LazyDashboard} />
-            <Route path="/leaderboard" component={LazyLeaderboard} />
+            <Route path="/leaderboard" component={LeaderboardSimple} />
             <Route path="/profile" component={LazyProfile} />
             <Route path="/study" component={LazyStudy} />
             <Route path="/games" component={LazyGames} />

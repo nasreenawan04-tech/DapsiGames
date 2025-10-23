@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "./queryClient";
-import type { User, Game, StudyMaterial, Achievement, UserActivity, Bookmark } from "@shared/schema";
+import type { User, Game, StudyMaterial, UserActivity, Bookmark } from "@shared/schema";
 
 // Real-time websocket connection for leaderboard updates
 let ws: WebSocket | null = null;
@@ -18,7 +18,7 @@ export function connectWebSocket() {
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
       if (message.type === "leaderboard_update") {
-        queryClient.invalidateQueries({ queryKey: ["/api/users/leaderboard"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/leaderboard"] });
         queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       }
     };
@@ -37,8 +37,17 @@ export function connectWebSocket() {
 
 // User hooks
 export function useLeaderboard() {
-  return useQuery<User[]>({
-    queryKey: ["/api/users/leaderboard"],
+  return useQuery<any[]>({
+    queryKey: ["/api/leaderboard"],
+    select: (data) => data.map((item, index) => ({
+      id: item.userId,
+      fullName: item.fullName,
+      points: item.totalPoints,
+      rank: item.currentRank || index + 1,
+      avatarUrl: item.avatarUrl,
+      gamesPlayed: item.gamesPlayed,
+      studySessions: item.studySessions,
+    })),
   });
 }
 
@@ -87,7 +96,7 @@ export function useCompleteGame() {
       return apiRequest("POST", `/api/games/${gameId}/complete`, { userId, score });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users/leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leaderboard"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
     },
@@ -114,7 +123,7 @@ export function useCompleteStudyMaterial() {
       return apiRequest("POST", `/api/study/${materialId}/complete`, { userId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users/leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leaderboard"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
     },

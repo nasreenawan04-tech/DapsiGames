@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Trophy, Medal, Search, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,16 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useLeaderboard, connectWebSocket } from "@/lib/api-hooks";
+import { useLeaderboard } from "@/lib/api-hooks";
 import { useAuth } from "@/lib/auth";
 
 export default function Leaderboard() {
   const { data: leaderboardData, isLoading } = useLeaderboard();
   const { user } = useAuth();
-
-  useEffect(() => {
-    connectWebSocket();
-  }, []);
 
   if (isLoading) {
     return (
