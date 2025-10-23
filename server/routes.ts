@@ -799,6 +799,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get group members
   app.get("/api/groups/:groupId/members", async (req, res) => {
     try {
+      const { groupId } = req.params;
+
       const groupMembers = await storage.getGroupMembers(groupId);
 
       const members = await Promise.all(groupMembers.map(async (member) => {
@@ -831,6 +833,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get group leaderboard
   app.get("/api/groups/:groupId/leaderboard", async (req, res) => {
     try {
+      const { groupId } = req.params;
+
       const leaderboard = await db
         .select({
           userId: users.id,
@@ -1560,10 +1564,566 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  // ==== Streaks Routes ====
+  // ===== Study Sessions Routes (Pomodoro Timer) =====
 
-  // Get user's streak
+  // Get study sessions for a user
+  app.get("/api/study-sessions/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
+    try {
+      const sessions = await storage.getUserStudySessions(req.params.userId);
+      res.json(sessions);
+    } catch (error: any) {
+      console.error("Error fetching study sessions:", error);
+      res.status(500).send({ error: error.message });
+    }
+  });
+
+  app.post("/api/study-sessions", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
+    try {
+      const { userId, duration, ambientSound } = req.body;
+
+      if (!userId || !duration) {
+        return res.status(400).send({ error: "Missing required fields" });
+      }
+
+      const session = await storage.createStudySession({
+        userId,
+        duration,
+        ambientSound: ambientSound || "silence",
+      });
+
+      res.json(session);
+    } catch (error: any) {
+      console.error("Error creating study session:", error);
+      res.status(500).send({ error: error.message });
+    }
+  });
+
+  app.patch("/api/study-sessions/:id/complete", async (req, res, next) => {
+    try {
+      const sessionId = req.params.id;
+      const session = await storage.completeStudySession(sessionId);
+
+      if (!session) {
+        return res.status(404).send({ message: "Session not found" });
+      }
+
+      // Update user XP
+      const user = await storage.getUserById(session.userId);
+      if (user) {
+        const newTotalXp = user.totalXp + session.xpEarned;
+        await storage.updateUserPoints(session.userId, newTotalXp);
+
+        // Check for level up
+        const newLevel = Math.floor(newTotalXp / 1000) + 1;
+        if (newLevel > user.level) {
+          await db.update(users)
+            .set({ level: newLevel })
+            .where(eq(users.id, session.userId));
+        }
+      }
+
+      // Update streak
+      await updateStreak(session.userId);
+
+      // Record activity
+      await storage.createActivity({
+        userId: session.userId,
+        activityType: "study_session",
+        title: `Completed ${session.duration} minute study session`,
+        points: session.xpEarned,
+      });
+
+      // Broadcast to WebSocket clients
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({
+            type: "study_session_completed",
+            userId: session.userId,
+            xpEarned: session.xpEarned,
+          }));
+        }
+      });
+
+      res.json(session);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ===== Tasks Routes =====
+
+  // Get tasks for a user
+  app.get("/api/tasks/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
+    try {
+      const tasks = await storage.getUserTasks(req.params.userId);
+      res.json(tasks);
+    } catch (error: any) {
+      console.error("Error fetching tasks:", error);
+      res.status(500).send({ error: error.message });
+    }
+  });
+
+  app.post("/api/tasks", async (req, res, next) => {
+    try {
+      const taskData = insertTaskSchema.parse(req.body);
+
+      // Validate user exists
+      const user = await storage.getUserById(taskData.userId);
+      if (!user) {
+        return res.status(404).send({ message: "User not found" });
+      }
+
+      // Calculate XP rewards based on priority
+      const xpReward = taskData.priority === "high" ? 30 : taskData.priority === "medium" ? 20 : 10;
+      const bonusXp = taskData.deadline ? 10 : 0;
+
+      const task = await storage.createTask({
+        ...taskData,
+        xpReward,
+        bonusXp,
+      });
+
+      // Create activity
+      await storage.createActivity({
+        userId: taskData.userId,
+        activityType: "task_created",
+        title: `Created task: ${taskData.title}`,
+        points: 0,
+      });
+
+      res.json(task);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/api/tasks/:taskId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
+    try {
+      const { title, description, category, priority, deadline } = req.body;
+      const task = await storage.updateTask(req.params.taskId, {
+        title,
+        description,
+        category,
+        priority,
+        deadline: deadline ? new Date(deadline) : null,
+      });
+
+      if (!task) {
+        return res.status(404).send({ error: "Task not found" });
+      }
+
+      res.json(task);
+    } catch (error: any) {
+      console.error("Error updating task:", error);
+      res.status(500).send({ error: error.message });
+    }
+  });
+
+  app.patch("/api/tasks/:taskId/complete", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
+    try {
+      const task = await storage.completeTask(req.params.taskId);
+
+      if (!task) {
+        return res.status(404).send({ error: "Task not found" });
+      }
+
+      // Calculate XP with bonus for early completion
+      let xpEarned = task.xpReward;
+      if (task.deadline && new Date() < new Date(task.deadline)) {
+        xpEarned += task.bonusXp;
+      }
+
+      // Update user XP
+      await storage.addUserPoints(task.userId, xpEarned);
+
+      // Broadcast points update
+      broadcastPointsEarned(task.userId, xpEarned, `Completed task: ${task.title}`);
+
+      res.json({ ...task, xpEarned });
+    } catch (error: any) {
+      console.error("Error completing task:", error);
+      res.status(500).send({ error: error.message });
+    }
+  });
+
+  app.delete("/api/tasks/:taskId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).send({ error: "Unauthorized" });
+    }
+
+    try {
+      await storage.deleteTask(req.params.taskId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting task:", error);
+      res.status(500).send({ error: error.message });
+    }
+  });
+
+  // ===== Streaks Routes =====
+
+  // Get streak for a user
   app.get("/api/streaks/:userId", async (req, res) => {
+    try {
+      if (!db) {
+        return res.status(503).json({ error: "Database not available" });
+      }
+
+      const [userStreak] = await db
+        .select()
+        .from(streaks)
+        .where(eq(streaks.userId, req.params.userId))
+        .limit(1);
+
+      if (!userStreak) {
+        // Create a new streak for the user
+        try {
+          const [newStreak] = await db
+            .insert(streaks)
+            .values({ 
+              userId: req.params.userId,
+              currentStreak: 0,
+              longestStreak: 0,
+            })
+            .returning();
+
+          return res.json(newStreak);
+        } catch (insertError: any) {
+          // If insert fails, try to select again (race condition)
+          const [existingStreak] = await db
+            .select()
+            .from(streaks)
+            .where(eq(streaks.userId, req.params.userId))
+            .limit(1);
+
+          if (existingStreak) {
+            return res.json(existingStreak);
+          }
+
+          throw insertError;
+        }
+      }
+
+      res.json(userStreak);
+    } catch (error: any) {
+      console.error("Error fetching streak:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ===== Badges Routes =====
+
+  // Get all badges
+  app.get("/api/badges", cacheMiddleware(), async (req, res) => {
+    try {
+      const allBadges = await db
+        .select()
+        .from(badges);
+
+      res.json(allBadges);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get user badges
+  app.get("/api/user-badges/:userId", async (req, res) => {
+    try {
+      const earnedBadges = await db
+        .select({
+          id: userBadges.id,
+          badgeId: userBadges.badgeId,
+          earnedAt: userBadges.earnedAt,
+          name: badges.name,
+          description: badges.description,
+          icon: badges.icon,
+          category: badges.category,
+        })
+        .from(userBadges)
+        .innerJoin(badges, eq(userBadges.badgeId, badges.id))
+        .where(eq(userBadges.userId, req.params.userId))
+        .orderBy(desc(userBadges.earnedAt));
+
+      res.json(earnedBadges);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== Seed Data Route (for development) =====
+
+  app.post("/api/seed", async (req, res) => {
+    try {
+      // Seed games
+      const gamesToSeed = [
+        {
+          title: "Math Quiz Challenge",
+          description: "Test your mathematical skills with rapid-fire questions",
+          difficulty: "Medium",
+          pointsReward: 150,
+          category: "Mathematics",
+          thumbnailUrl: "/assets/math-game.png",
+          instructions: "Answer as many questions correctly as possible within the time limit",
+        },
+        {
+          title: "Science Trivia Master",
+          description: "Answer questions about physics, chemistry, and biology",
+          difficulty: "Hard",
+          pointsReward: 200,
+          category: "Science",
+          thumbnailUrl: "/assets/science-game.png",
+          instructions: "Choose the correct answer for each science question",
+        },
+        {
+          title: "Geography Quest",
+          description: "Explore the world with geography questions",
+          difficulty: "Easy",
+          pointsReward: 100,
+          category: "Geography",
+          thumbnailUrl: "/assets/geography-game.png",
+          instructions: "Test your knowledge of world geography",
+        },
+      ];
+
+      const existingGames = await db.select().from(games);
+
+      if (existingGames.length === 0) {
+        await db.insert(games).values(gamesToSeed);
+      }
+
+      // Seed study materials
+      const materialsToSeed = [
+        {
+          title: "Algebra Fundamentals",
+          description: "Master the basics of algebraic equations",
+          subject: "Mathematics",
+          difficulty: "Easy",
+          content: "Learn about variables, equations, and algebraic principles",
+          pointsReward: 100,
+        },
+        {
+          title: "Newton's Laws of Motion",
+          description: "Understanding classical mechanics",
+          subject: "Physics",
+          difficulty: "Medium",
+          content: "Explore the three fundamental laws of motion",
+          pointsReward: 150,
+        },
+      ];
+
+      const existingMaterials = await db.select().from(studyMaterials);
+
+      if (existingMaterials.length === 0) {
+        await db.insert(studyMaterials).values(materialsToSeed);
+      }
+
+      // Seed achievement definitions
+      const achievementsToSeed = [
+        {
+          name: "First Steps",
+          description: "Earn your first 10 points",
+          badgeIcon: "badge-first-steps",
+          pointsRequired: 10,
+          category: "Beginner",
+        },
+        {
+          name: "Rising Star",
+          description: "Reach 100 points",
+          badgeIcon: "badge-rising-star",
+          pointsRequired: 100,
+          category: "Progress",
+        },
+        {
+          name: "Knowledge Seeker",
+          description: "Complete 5 study sessions",
+          badgeIcon: "badge-knowledge-seeker",
+          pointsRequired: 500,
+          category: "Study",
+        },
+        {
+          name: "Gaming Master",
+          description: "Win 10 games",
+          badgeIcon: "badge-gaming-master",
+          pointsRequired: 1000,
+          category: "Gaming",
+        },
+        {
+          name: "Top Performer",
+          description: "Reach the top 10 on the leaderboard",
+          badgeIcon: "badge-top-performer",
+          pointsRequired: 5000,
+          category: "Achievement",
+        },
+        {
+          name: "Legendary",
+          description: "Earn 10,000 points",
+          badgeIcon: "badge-legendary",
+          pointsRequired: 10000,
+          category: "Elite",
+        },
+      ];
+
+      const existingAchievements = await db.select().from(achievementDefinitions);
+
+      if (existingAchievements.length === 0) {
+        await db.insert(achievementDefinitions).values(achievementsToSeed);
+      }
+
+      res.json({ message: "Database seeded successfully" });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ===== PHASE 6: Gamification Backend & Advanced Features =====
+
+  // Initialize levels and badges on server start
+  initializeLevels().catch((error) => {
+    console.error("Failed to initialize levels:", error.message);
+  });
+  initializeBadges().catch((error) => {
+    console.error("Failed to initialize badges:", error.message);
+  });
+
+  // ==== XP & Level System Routes ====
+
+  // Get user level info
+  app.get("/api/users/:userId/level", async (req, res) => {
+    try {
+      const [userLevel] = await db
+        .select()
+        .from(userLevels)
+        .where(eq(userLevels.userId, req.params.userId))
+        .limit(1);
+
+      if (!userLevel) {
+        return res.status(404).json({ error: "User level not found" });
+      }
+
+      const levelInfo = await getLevelFromXP(userLevel.totalXp);
+
+      res.json({
+        ...userLevel,
+        ...levelInfo,
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Award XP to user (used after completing sessions, tasks, games)
+  app.post("/api/users/:userId/xp", async (req, res) => {
+    try {
+      const { amount, reason } = req.body;
+
+      if (typeof amount !== "number" || amount <= 0) {
+        return res.status(400).json({ error: "Invalid XP amount" });
+      }
+
+      const result = await awardXP(req.params.userId, amount);
+
+      // Check for new achievements
+      const newBadges = await checkAndAwardAchievements(req.params.userId);
+
+      // Update streak
+      const streakResult = await updateStreak(req.params.userId);
+
+      // Broadcast leaderboard update
+      broadcastLeaderboardUpdate();
+
+      res.json({
+        ...result,
+        newBadges,
+        streak: streakResult,
+        reason: reason || "XP awarded",
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get all levels
+  app.get("/api/levels", async (req, res) => {
+    try {
+      const levelList = await db
+        .select()
+        .from(levels)
+        .orderBy(levels.levelNumber);
+
+      res.json(levelList);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ==== Coins System Routes ====
+
+  // Get user coins
+  app.get("/api/users/:userId/coins", async (req, res) => {
+    try {
+      const [coins] = await db
+        .select()
+        .from(userCoins)
+        .where(eq(userCoins.userId, req.params.userId))
+        .limit(1);
+
+      if (!coins) {
+        // Create default coins record
+        const [newCoins] = await db
+          .insert(userCoins)
+          .values({ userId: req.params.userId })
+          .returning();
+
+        return res.json(newCoins);
+      }
+
+      res.json(coins);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Award coins (manual or system)
+  app.post("/api/users/:userId/coins/award", async (req, res) => {
+    try {
+      const { amount, reason } = req.body;
+
+      if (typeof amount !== "number" || amount <= 0) {
+        return res.status(400).json({ error: "Invalid coin amount" });
+      }
+
+      const result = await awardCoins(req.params.userId, amount, reason || "Coins awarded");
+
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ==== Streak System Routes ====
+
+  // Get user streak
+  app.get("/api/users/:userId/streak", async (req, res) => {
     try {
       const [streak] = await db
         .select()
@@ -1572,14 +2132,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .limit(1);
 
       if (!streak) {
-        // Create initial streak record
+        // Create default streak record
         const [newStreak] = await db
           .insert(streaks)
-          .values({
-            userId: req.params.userId,
-            currentStreak: 0,
-            longestStreak: 0,
-          })
+          .values({ userId: req.params.userId })
           .returning();
 
         return res.json(newStreak);
@@ -1591,204 +2147,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ==== Study Sessions (Pomodoro) Routes ====
-
-  // Get user's study sessions
-  app.get("/api/study-sessions/:userId", async (req, res) => {
+  // Update streak (called after study session)
+  app.post("/api/users/:userId/streak/update", async (req, res) => {
     try {
-      const sessions = await db
-        .select()
-        .from(studySessions)
-        .where(eq(studySessions.userId, req.params.userId))
-        .orderBy(desc(studySessions.startedAt))
-        .limit(10);
-
-      res.json(sessions);
+      const result = await updateStreak(req.params.userId);
+      res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  // Create new study session
-  app.post("/api/study-sessions", async (req, res) => {
+  // ==== Badge System Routes ====
+
+  // Get all badges (definitions)
+  app.get("/api/badges", async (req, res) => {
     try {
-      const validatedData = insertStudySessionSchema.parse(req.body);
-
-      const [session] = await db
-        .insert(studySessions)
-        .values(validatedData)
-        .returning();
-
-      res.json(session);
+      const allBadges = await db.select().from(badges);
+      res.json(allBadges);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  // Complete study session
-  app.patch("/api/study-sessions/:sessionId/complete", async (req, res) => {
+  // Get user badges
+  app.get("/api/users/:userId/badges", async (req, res) => {
     try {
-      const [session] = await db
-        .select()
-        .from(studySessions)
-        .where(eq(studySessions.id, req.params.sessionId))
-        .limit(1);
-
-      if (!session) {
-        return res.status(404).json({ error: "Session not found" });
-      }
-
-      const xpEarned = calculateStudySessionXP(session.duration);
-
-      const [updatedSession] = await db
-        .update(studySessions)
-        .set({
-          completed: true,
-          completedAt: new Date(),
-          xpEarned,
+      const userBadgesList = await db
+        .select({
+          id: userBadges.id,
+          earnedAt: userBadges.earnedAt,
+          badge: badges,
         })
-        .where(eq(studySessions.id, req.params.sessionId))
-        .returning();
+        .from(userBadges)
+        .innerJoin(badges, eq(userBadges.badgeId, badges.id))
+        .where(eq(userBadges.userId, req.params.userId));
 
-      // Award XP and update streak
-      await awardXP(session.userId, xpEarned, `Completed ${session.duration}-minute study session`);
-      await updateStreak(session.userId);
-
-      // Check achievements
-      await checkAndAwardAchievements(session.userId);
-
-      res.json(updatedSession);
+      res.json(userBadgesList);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  // ===== Tasks Routes ====
+  // ==== Friend System Routes ====
 
-  // Get user's tasks
-  app.get("/api/tasks/:userId", async (req, res) => {
+  // Get user friends
+  app.get("/api/users/:userId/friends", async (req, res) => {
     try {
-      const userTasks = await db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.userId, req.params.userId))
-        .orderBy(desc(tasks.createdAt));
+      const friendsList = await db
+        .select({ friendId: friendships.friendId })
+        .from(friendships)
+        .where(eq(friendships.userId, req.params.userId));
 
-      res.json(userTasks);
+      const friendsData = await Promise.all(friendsList.map(async (f: any) => {
+        const friend = await storage.getUser(f.friendId);
+        if (!friend) return null;
+
+        const friendship = await storage.getFriendship(req.params.userId, f.friendId);
+
+        return {
+          id: friendship?.id,
+          friendId: friend.id,
+          fullName: friend.fullName,
+          avatarUrl: friend.avatarUrl,
+          points: friend.points,
+          status: friendship?.status,
+          createdAt: friendship?.createdAt,
+        };
+      }));
+
+      return res.json(friendsData.filter(f => f !== null));
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
-
-  // Create new task
-  app.post("/api/tasks", async (req, res) => {
-    try {
-      const validatedData = insertTaskSchema.parse(req.body);
-
-      const [task] = await db
-        .insert(tasks)
-        .values(validatedData)
-        .returning();
-
-      res.json(task);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Update task
-  app.patch("/api/tasks/:taskId", async (req, res) => {
-    try {
-      const [task] = await db
-        .update(tasks)
-        .set(req.body)
-        .where(eq(tasks.id, req.params.taskId))
-        .returning();
-
-      res.json(task);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Complete task
-  app.patch("/api/tasks/:taskId/complete", async (req, res) => {
-    try {
-      const [task] = await db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.id, req.params.taskId))
-        .limit(1);
-
-      if (!task) {
-        return res.status(404).json({ error: "Task not found" });
-      }
-
-      const xpEarned = calculateTaskCompletionXP(task);
-
-      const [updatedTask] = await db
-        .update(tasks)
-        .set({
-          completed: true,
-          completedAt: new Date(),
-        })
-        .where(eq(tasks.id, req.params.taskId))
-        .returning();
-
-      // Award XP
-      await awardXP(task.userId, xpEarned, `Completed task: ${task.title}`);
-
-      // Check achievements
-      await checkAndAwardAchievements(task.userId);
-
-      res.json({ ...updatedTask, xpEarned });
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Delete task
-  app.delete("/api/tasks/:taskId", async (req, res) => {
-    try {
-      await db
-        .delete(tasks)
-        .where(eq(tasks.id, req.params.taskId));
-
-      res.json({ message: "Task deleted successfully" });
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // ==== Friendships Routes ====
 
   // Send friend request
-  app.post("/api/friendships", async (req, res) => {
+  app.post("/api/users/:userId/friends/request", async (req, res) => {
     try {
-      const { userId, friendId } = req.body;
+      const { friendId } = req.body;
 
-      if (userId === friendId) {
-        return res.status(400).json({ error: "Cannot add yourself as friend" });
+      if (!friendId) {
+        return res.status(400).json({ error: "Friend ID required" });
       }
 
       // Check if friendship already exists
-      const existing = await db
+      const [existing] = await db
         .select()
         .from(friendships)
         .where(
-          sql`(${friendships.userId} = ${userId} AND ${friendships.friendId} = ${friendId}) 
-           OR (${friendships.userId} = ${friendId} AND ${friendships.friendId} = ${userId})`
+          sql`(${friendships.userId} = ${req.params.userId} AND ${friendships.friendId} = ${friendId}) OR (${friendships.userId} = ${friendId} AND ${friendships.friendId} = ${req.params.userId})`
         )
         .limit(1);
 
-      if (existing.length > 0) {
-        return res.status(400).json({ error: "Friend request already exists" });
+      if (existing) {
+        return res.status(400).json({ error: "Friendship already exists" });
       }
 
+      // Create friend request
       const [friendship] = await db
         .insert(friendships)
         .values({
-          userId,
+          userId: req.params.userId,
           friendId,
           status: "pending",
         })
@@ -1800,258 +2259,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user's friends
-  app.get("/api/friendships/:userId", async (req, res) => {
+  // Accept/reject friend request
+  app.patch("/api/friendships/:friendshipId", async (req, res) => {
     try {
-      const userFriendships = await db
-        .select({
-          id: friendships.id,
-          userId: friendships.userId,
-          friendId: friendships.friendId,
-          status: friendships.status,
-          createdAt: friendships.createdAt,
-          friendName: users.fullName,
-          friendAvatar: users.avatarUrl,
-          friendPoints: users.points,
-        })
+      const { status } = req.body;
+
+      if (!["accepted", "rejected"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+
+      const [updated] = await db
+        .update(friendships)
+        .set({ status, updatedAt: new Date() })
+        .where(eq(friendships.id, req.params.friendshipId))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: "Friendship not found" });
+      }
+
+      // If accepted, create reciprocal friendship
+      if (status === "accepted") {
+        const [reciprocal] = await db
+          .select()
+          .from(friendships)
+          .where(
+            sql`${friendships.userId} = ${updated.friendId} AND ${friendships.friendId} = ${updated.userId}`
+          )
+          .limit(1);
+
+        if (!reciprocal) {
+          await db.insert(friendships).values({
+            userId: updated.friendId,
+            friendId: updated.userId,
+            status: "accepted",
+          });
+        }
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get friend leaderboard
+  app.get("/api/users/:userId/friends/leaderboard", async (req, res) => {
+    try {
+      // Get accepted friends
+      const friendsList = await db
+        .select({ friendId: friendships.friendId })
         .from(friendships)
-        .leftJoin(users, eq(users.id, friendships.friendId))
         .where(
           sql`${friendships.userId} = ${req.params.userId} AND ${friendships.status} = 'accepted'`
         );
 
-      res.json(userFriendships);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
+      const friendIds = friendsList.map((f: any) => f.friendId);
+      friendIds.push(req.params.userId); // Include current user
 
-  // Accept friend request
-  app.patch("/api/friendships/:friendshipId/accept", async (req, res) => {
-    try {
-      const [friendship] = await db
-        .update(friendships)
-        .set({ status: "accepted", updatedAt: new Date() })
-        .where(eq(friendships.id, req.params.friendshipId))
-        .returning();
-
-      res.json(friendship);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Reject friend request
-  app.patch("/api/friendships/:friendshipId/reject", async (req, res) => {
-    try {
-      const [friendship] = await db
-        .update(friendships)
-        .set({ status: "rejected", updatedAt: new Date() })
-        .where(eq(friendships.id, req.params.friendshipId))
-        .returning();
-
-      res.json(friendship);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // ==== Groups Routes ====
-
-  // Get all public groups
-  app.get("/api/groups", async (req, res) => {
-    try {
-      const allGroups = await db
-        .select({
-          id: groups.id,
-          name: groups.name,
-          description: groups.description,
-          ownerId: groups.ownerId,
-          avatarUrl: groups.avatarUrl,
-          isPublic: groups.isPublic,
-          createdAt: groups.createdAt,
-          memberCount: sql<number>`(
-            SELECT COUNT(*)::int 
-            FROM ${groupMembers} 
-            WHERE ${groupMembers.groupId} = ${groups.id}
-          )`,
-        })
-        .from(groups)
-        .where(eq(groups.isPublic, true));
-
-      res.json(allGroups);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Get user's groups
-  app.get("/api/groups/user/:userId", async (req, res) => {
-    try {
-      const userGroups = await db
-        .select({
-          id: groups.id,
-          groupId: groupMembers.groupId,
-          name: groups.name,
-          groupName: groups.name,
-          description: groups.description,
-          ownerId: groups.ownerId,
-          avatarUrl: groups.avatarUrl,
-          isPublic: groups.isPublic,
-          createdAt: groups.createdAt,
-          role: groupMembers.role,
-          joinedAt: groupMembers.joinedAt,
-          memberCount: sql<number>`(
-            SELECT COUNT(*)::int 
-            FROM ${groupMembers} gm2 
-            WHERE gm2.group_id = ${groups.id}
-          )`,
-        })
-        .from(groupMembers)
-        .innerJoin(groups, eq(groups.id, groupMembers.groupId))
-        .where(eq(groupMembers.userId, req.params.userId));
-
-      res.json(userGroups);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Get single group
-  app.get("/api/groups/:groupId", async (req, res) => {
-    try {
-      const [group] = await db
-        .select()
-        .from(groups)
-        .where(eq(groups.id, req.params.groupId))
-        .limit(1);
-
-      if (!group) {
-        return res.status(404).json({ error: "Group not found" });
+      if (friendIds.length === 0) {
+        return res.json([]);
       }
 
-      res.json(group);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Create group
-  app.post("/api/groups", async (req, res) => {
-    try {
-      const validatedData = insertGroupSchema.parse(req.body);
-
-      const [group] = await db
-        .insert(groups)
-        .values(validatedData)
-        .returning();
-
-      // Add creator as owner member
-      await db.insert(groupMembers).values({
-        groupId: group.id,
-        userId: validatedData.ownerId,
-        role: "owner",
-      });
-
-      res.json(group);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Join group
-  app.post("/api/groups/:groupId/join", async (req, res) => {
-    try {
-      const { userId } = req.body;
-
-      // Check if already a member
-      const existing = await db
-        .select()
-        .from(groupMembers)
-        .where(
-          and(
-            eq(groupMembers.groupId, req.params.groupId),
-            eq(groupMembers.userId, userId)
-          )
-        )
-        .limit(1);
-
-      if (existing.length > 0) {
-        return res.status(400).json({ error: "Already a member" });
-      }
-
-      const [member] = await db
-        .insert(groupMembers)
-        .values({
-          groupId: req.params.groupId,
-          userId,
-          role: "member",
-        })
-        .returning();
-
-      res.json(member);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Leave group
-  app.post("/api/groups/:groupId/leave", async (req, res) => {
-    try {
-      const { userId } = req.body;
-
-      await db
-        .delete(groupMembers)
-        .where(
-          and(
-            eq(groupMembers.groupId, req.params.groupId),
-            eq(groupMembers.userId, userId)
-          )
-        );
-
-      res.json({ message: "Left group successfully" });
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Get group members
-  app.get("/api/groups/:groupId/members", async (req, res) => {
-    try {
-      const members = await db
-        .select({
-          id: groupMembers.id,
-          userId: groupMembers.userId,
-          role: groupMembers.role,
-          joinedAt: groupMembers.joinedAt,
-          fullName: users.fullName,
-          avatarUrl: users.avatarUrl,
-        })
-        .from(groupMembers)
-        .innerJoin(users, eq(users.id, groupMembers.userId))
-        .where(eq(groupMembers.groupId, req.params.groupId));
-
-      res.json(members);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  // Get group leaderboard
-  app.get("/api/groups/:groupId/leaderboard", async (req, res) => {
-    try {
       const leaderboard = await db
         .select({
-          userId: users.id,
+          userId: userStats.userId,
+          totalPoints: userStats.totalPoints,
+          currentRank: userStats.currentRank,
           fullName: users.fullName,
           avatarUrl: users.avatarUrl,
-          totalPoints: users.points,
         })
-        .from(groupMembers)
-        .innerJoin(users, eq(users.id, groupMembers.userId))
-        .where(eq(groupMembers.groupId, req.params.groupId))
-        .orderBy(desc(users.points))
-        .limit(20);
+        .from(userStats)
+        .innerJoin(users, eq(userStats.userId, users.id))
+        .where(inArray(userStats.userId, friendIds))
+        .orderBy(desc(userStats.totalPoints));
 
       res.json(leaderboard);
     } catch (error: any) {
@@ -2059,82 +2340,262 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get group activities
-  app.get("/api/groups/:groupId/activities", async (req, res) => {
+  // ==== Reward Shop Routes ====
+
+  // Get all shop items
+  app.get("/api/shop/items", async (req, res) => {
     try {
-      const memberIds = await db
+      const { category } = req.query;
+
+      let query = db.select().from(shopItems).where(eq(shopItems.isActive, true));
+
+      if (category && typeof category === "string") {
+        query = db
+          .select()
+          .from(shopItems)
+          .where(
+            sql`${shopItems.isActive} = true AND ${shopItems.category} = ${category}`
+          );
+      }
+
+      const items = await query;
+      res.json(items);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Purchase shop item
+  app.post("/api/users/:userId/shop/purchase", async (req, res) => {
+    try {
+      const { shopItemId } = req.body;
+
+      if (!shopItemId) {
+        return res.status(400).json({ error: "Shop item ID required" });
+      }
+
+      // Get shop item
+      const [item] = await db
+        .select()
+        .from(shopItems)
+        .where(eq(shopItems.id, shopItemId))
+        .limit(1);
+
+      if (!item || !item.isActive) {
+        return res.status(404).json({ error: "Item not found or not available" });
+      }
+
+      // Check if already owned
+      const [existing] = await db
+        .select()
+        .from(userInventory)
+        .where(
+          sql`${userInventory.userId} = ${req.params.userId} AND ${userInventory.shopItemId} = ${shopItemId}`
+        )
+        .limit(1);
+
+      if (existing) {
+        return res.status(400).json({ error: "Item already owned" });
+      }
+
+      // Spend coins
+      const spendResult = await spendCoins(req.params.userId, item.coinCost);
+
+      if (!spendResult.success) {
+        return res.status(400).json({ error: spendResult.error });
+      }
+
+      // Add to inventory
+      const [inventoryItem] = await db
+        .insert(userInventory)
+        .values({
+          userId: req.params.userId,
+          shopItemId,
+        })
+        .returning();
+
+      res.json({
+        inventoryItem,
+        newBalance: spendResult.newBalance,
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get user inventory
+  app.get("/api/users/:userId/inventory", async (req, res) => {
+    try {
+      const inventory = await db
+        .select({
+          id: userInventory.id,
+          isEquipped: userInventory.isEquipped,
+          purchasedAt: userInventory.purchasedAt,
+          item: shopItems,
+        })
+        .from(userInventory)
+        .innerJoin(shopItems, eq(userInventory.shopItemId, shopItems.id))
+        .where(eq(userInventory.userId, req.params.userId));
+
+      res.json(inventory);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Equip/unequip inventory item
+  app.patch("/api/users/:userId/inventory/:itemId/equip", async (req, res) => {
+    try {
+      const { isEquipped } = req.body;
+
+      if (typeof isEquipped !== "boolean") {
+        return res.status(400).json({ error: "isEquipped must be boolean" });
+      }
+
+      // If equipping, unequip other items of the same category
+      if (isEquipped) {
+        const [item] = await db
+          .select({
+            category: shopItems.category,
+          })
+          .from(userInventory)
+          .innerJoin(shopItems, eq(userInventory.shopItemId, shopItems.id))
+          .where(eq(userInventory.id, req.params.itemId))
+          .limit(1);
+
+        if (item) {
+          // Unequip all items of same category
+          await db
+            .update(userInventory)
+            .set({ isEquipped: false })
+            .where(
+              sql`${userInventory.userId} = ${req.params.userId} AND ${userInventory.shopItemId} IN (SELECT id FROM ${shopItems} WHERE ${shopItems.category} = ${item.category})`
+            );
+        }
+      }
+
+      // Update the item
+      const [updated] = await db
+        .update(userInventory)
+        .set({ isEquipped })
+        .where(eq(userInventory.id, req.params.itemId))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ==== Group Leaderboards & Competitions ====
+
+  // Get group leaderboard
+  app.get("/api/groups/:groupId/leaderboard", async (req, res) => {
+    try {
+      const membersList = await db
         .select({ userId: groupMembers.userId })
         .from(groupMembers)
         .where(eq(groupMembers.groupId, req.params.groupId));
 
-      const userIds = memberIds.map((m) => m.userId);
+      const memberIds = membersList.map((m: any) => m.userId);
 
-      if (userIds.length === 0) {
+      if (memberIds.length === 0) {
         return res.json([]);
       }
 
-      const activities = await db
+      const leaderboard = await db
         .select({
-          id: userActivities.id,
-          userId: userActivities.userId,
-          activityType: userActivities.activityType,
-          activityTitle: userActivities.activityTitle,
-          pointsEarned: userActivities.pointsEarned,
-          timestamp: userActivities.timestamp,
+          userId: userStats.userId,
+          totalPoints: userStats.totalPoints,
+          currentRank: userStats.currentRank,
           fullName: users.fullName,
           avatarUrl: users.avatarUrl,
+          role: groupMembers.role,
         })
-        .from(userActivities)
-        .innerJoin(users, eq(users.id, userActivities.userId))
-        .where(inArray(userActivities.userId, userIds))
-        .orderBy(desc(userActivities.timestamp))
-        .limit(50);
+        .from(userStats)
+        .innerJoin(users, eq(userStats.userId, users.id))
+        .innerJoin(groupMembers, eq(groupMembers.userId, users.id))
+        .where(
+          sql`${groupMembers.groupId} = ${req.params.groupId} AND ${inArray(userStats.userId, memberIds)}`
+        )
+        .orderBy(desc(userStats.totalPoints));
 
-      res.json(activities);
+      res.json(leaderboard);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  // Get group messages
-  app.get("/api/groups/:groupId/messages", async (req, res) => {
+  // Get group challenge progress
+  app.get("/api/groups/:groupId/challenges/:challengeId/progress", async (req, res) => {
     try {
-      const messages = await db
-        .select({
-          id: groupMessages.id,
-          groupId: groupMessages.groupId,
-          userId: groupMessages.userId,
-          message: groupMessages.message,
-          createdAt: groupMessages.createdAt,
-          fullName: users.fullName,
-          avatarUrl: users.avatarUrl,
-        })
-        .from(groupMessages)
-        .innerJoin(users, eq(users.id, groupMessages.userId))
-        .where(eq(groupMessages.groupId, req.params.groupId))
-        .orderBy(groupMessages.createdAt)
-        .limit(100);
+      const [challenge] = await db
+        .select()
+        .from(groupChallenges)
+        .where(eq(groupChallenges.id, req.params.challengeId))
+        .limit(1);
 
-      res.json(messages);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
+      if (!challenge) {
+        return res.status(404).json({ error: "Challenge not found" });
+      }
 
-  // Send group message
-  app.post("/api/groups/:groupId/messages", async (req, res) => {
-    try {
-      const validatedData = insertGroupMessageSchema.parse({
-        ...req.body,
-        groupId: req.params.groupId,
+      // Get all members
+      const membersList = await db
+        .select({ userId: groupMembers.userId })
+        .from(groupMembers)
+        .where(eq(groupMembers.groupId, req.params.groupId));
+
+      const memberIds = membersList.map((m: any) => m.userId);
+
+      // Calculate progress based on challenge type
+      let progress: any[] = [];
+
+      if (challenge.challengeType === "points") {
+        progress = await db
+          .select({
+            userId: users.id,
+            fullName: users.fullName,
+            avatarUrl: users.avatarUrl,
+            value: userStats.totalPoints,
+          })
+          .from(users)
+          .innerJoin(userStats, eq(userStats.userId, users.id))
+          .where(inArray(users.id, memberIds))
+          .orderBy(desc(userStats.totalPoints));
+      } else if (challenge.challengeType === "study_sessions") {
+        progress = await db
+          .select({
+            userId: users.id,
+            fullName: users.fullName,
+            avatarUrl: users.avatarUrl,
+            value: userStats.studySessions,
+          })
+          .from(users)
+          .innerJoin(userStats, eq(userStats.userId, users.id))
+          .where(inArray(users.id, memberIds))
+          .orderBy(desc(userStats.studySessions));
+      } else if (challenge.challengeType === "games_completed") {
+        progress = await db
+          .select({
+            userId: users.id,
+            fullName: users.fullName,
+            avatarUrl: users.avatarUrl,
+            value: userStats.gamesPlayed,
+          })
+          .from(users)
+          .innerJoin(userStats, eq(userStats.userId, users.id))
+          .where(inArray(users.id, memberIds))
+          .orderBy(desc(userStats.gamesPlayed));
+      }
+
+      res.json({
+        challenge,
+        progress,
       });
-
-      const [message] = await db
-        .insert(groupMessages)
-        .values(validatedData)
-        .returning();
-
-      res.json(message);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
