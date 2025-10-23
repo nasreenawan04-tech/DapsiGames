@@ -236,7 +236,6 @@ export const tasks = pgTable("tasks", {
 export const insertTaskSchema = createInsertSchema(tasks).omit({
   id: true,
   completed: true,
-  bonusXp: true,
   createdAt: true,
   completedAt: true,
 });
