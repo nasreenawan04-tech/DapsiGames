@@ -1,27 +1,17 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
 import {
   signIn,
   signUp,
   signOut,
   getCurrentUser,
   onAuthStateChange,
+  type AuthUser,
 } from "@/services/authService";
 import { getRedirectPath } from "./redirectAfterAuth";
 
-interface AuthUser {
-  id: string;
-  email: string;
-  fullName: string;
-  avatarUrl?: string;
-  points?: number;
-  rank?: number;
-}
-
 interface AuthContextType {
   user: AuthUser | null;
-  supabaseUser: SupabaseUser | null;
   login: (email: string, password: string) => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<{ needsEmailVerification: boolean }>;
   logout: () => Promise<void>;
@@ -32,7 +22,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [, setLocation] = useLocation();
 
@@ -43,13 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const currentUser = await getCurrentUser();
         if (mounted && currentUser) {
-          setSupabaseUser(currentUser);
-          setUser({
-            id: currentUser.id,
-            email: currentUser.email || '',
-            fullName: currentUser.user_metadata?.full_name || '',
-            avatarUrl: currentUser.user_metadata?.avatar_url,
-          });
+          setUser(currentUser);
         }
       } catch (error) {
         console.error('Error fetching current user:', error);
@@ -62,20 +45,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initAuth();
 
-    const subscription = onAuthStateChange((supabaseUser) => {
+    const subscription = onAuthStateChange((authUser) => {
       if (!mounted) return;
-
-      setSupabaseUser(supabaseUser);
-      if (supabaseUser) {
-        setUser({
-          id: supabaseUser.id,
-          email: supabaseUser.email || '',
-          fullName: supabaseUser.user_metadata?.full_name || '',
-          avatarUrl: supabaseUser.user_metadata?.avatar_url,
-        });
-      } else {
-        setUser(null);
-      }
+      setUser(authUser);
     });
 
     return () => {
@@ -85,15 +57,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { user: supabaseUser } = await signIn({ email, password });
+    const { user: authUser } = await signIn({ email, password });
     
-    setSupabaseUser(supabaseUser);
-    setUser({
-      id: supabaseUser.id,
-      email: supabaseUser.email || '',
-      fullName: supabaseUser.user_metadata?.full_name || '',
-      avatarUrl: supabaseUser.user_metadata?.avatar_url,
-    });
+    setUser(authUser);
     
     // Redirect using centralized utility
     setLocation(getRedirectPath());
@@ -107,13 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (result.user) {
-      setSupabaseUser(result.user);
-      setUser({
-        id: result.user.id,
-        email: result.user.email || '',
-        fullName: result.user.user_metadata?.full_name || '',
-        avatarUrl: result.user.user_metadata?.avatar_url,
-      });
+      setUser(result.user);
       
       // Redirect using centralized utility
       setLocation(getRedirectPath());
@@ -125,12 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     await signOut();
     setUser(null);
-    setSupabaseUser(null);
     setLocation("/");
   };
 
   return (
-    <AuthContext.Provider value={{ user, supabaseUser, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
