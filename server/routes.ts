@@ -346,22 +346,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check if friendship already exists
-      const existing = await db
-        .select()
-        .from(friendships)
-        .where(
-          sql`(${friendships.userId} = ${userId} AND ${friendships.friendId} = ${friendId}) OR (${friendships.userId} = ${friendId} AND ${friendships.friendId} = ${userId})`
-        )
-        .limit(1);
+      const existingFriendships = await storage.getUserFriendships(userId);
+      const existing = existingFriendships.find(
+        (f) => 
+          (f.userId === userId && f.friendId === friendId) ||
+          (f.userId === friendId && f.friendId === userId)
+      );
       
-      if (existing.length > 0) {
+      if (existing) {
         return res.status(400).json({ error: "Friend request already exists" });
       }
       
-      const [friendship] = await db
-        .insert(friendships)
-        .values({ userId, friendId, status: 'pending' })
-        .returning();
+      const friendship = await storage.createFriendship({ userId, friendId });
       
       res.json(friendship);
     } catch (error: any) {
@@ -515,19 +511,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertGroupSchema.parse(req.body);
       
-      const [newGroup] = await db
-        .insert(groups)
-        .values(validatedData)
-        .returning();
+      const newGroup = await storage.createGroup(validatedData);
       
       // Automatically add creator as owner
-      await db
-        .insert(groupMembers)
-        .values({
-          groupId: newGroup.id,
-          userId: validatedData.ownerId,
-          role: 'owner',
-        });
+      await storage.createGroupMember({
+        groupId: newGroup.id,
+        userId: validatedData.ownerId,
+        role: 'owner',
+      });
       
       res.json(newGroup);
     } catch (error: any) {
@@ -1460,10 +1451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertStudySessionSchema.parse(req.body);
       
-      const [newSession] = await db
-        .insert(studySessions)
-        .values(validatedData)
-        .returning();
+      const newSession = await storage.createStudySession(validatedData);
 
       res.json(newSession);
     } catch (error: any) {
@@ -1476,12 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
       
-      const sessions = await db
-        .select()
-        .from(studySessions)
-        .where(eq(studySessions.userId, req.params.userId))
-        .orderBy(desc(studySessions.startedAt))
-        .limit(limit);
+      const sessions = await storage.getUserStudySessions(req.params.userId);
 
       res.json(sessions);
     } catch (error: any) {
@@ -1573,11 +1556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get tasks for a user
   app.get("/api/tasks/:userId", async (req, res) => {
     try {
-      const userTasks = await db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.userId, req.params.userId))
-        .orderBy(desc(tasks.createdAt));
+      const userTasks = await storage.getUserTasks(req.params.userId);
 
       res.json(userTasks);
     } catch (error: any) {
@@ -1590,10 +1569,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertTaskSchema.parse(req.body);
       
-      const [newTask] = await db
-        .insert(tasks)
-        .values(validatedData)
-        .returning();
+      const newTask = await storage.createTask(validatedData);
 
       res.json(newTask);
     } catch (error: any) {
