@@ -1,4 +1,4 @@
-import { apiRequest } from '@/lib/queryClient';
+import { supabase } from '@/lib/supabase';
 
 export interface AuthUser {
   id: string;
@@ -26,142 +26,218 @@ export interface LoginResponse {
 }
 
 /**
- * Sign up a new user with email and password
+ * Sign up a new user with email and password using Supabase
  */
 export async function signUp(data: SignupData) {
-  const response = await apiRequest<LoginResponse>('POST', '/api/auth/register', data);
+  const { data: authData, error } = await supabase.auth.signUp({
+    email: data.email,
+    password: data.password,
+    options: {
+      data: {
+        full_name: data.fullName,
+      },
+    },
+  });
 
-  if (!response) {
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!authData.user) {
     throw new Error('Failed to create user account');
   }
 
-  // Store user ID in localStorage for session management
-  localStorage.setItem('userId', response.id);
+  // Check if email confirmation is required
+  const needsEmailVerification = authData.user.identities?.length === 0;
+
+  const user: AuthUser = {
+    id: authData.user.id,
+    email: authData.user.email!,
+    fullName: data.fullName,
+    avatarUrl: authData.user.user_metadata?.avatar_url,
+  };
 
   return {
-    user: response,
-    session: { userId: response.id },
-    needsEmailVerification: false,
+    user,
+    session: authData.session,
+    needsEmailVerification,
   };
 }
 
 /**
- * Sign in with email and password
+ * Sign in with email and password using Supabase
  */
 export async function signIn(data: LoginData) {
-  const response = await apiRequest<LoginResponse>('POST', '/api/auth/login', data);
+  const { data: authData, error } = await supabase.auth.signInWithPassword({
+    email: data.email,
+    password: data.password,
+  });
 
-  if (!response) {
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!authData.user) {
     throw new Error('Failed to sign in');
   }
 
-  // Store user ID in localStorage for session management
-  localStorage.setItem('userId', response.id);
+  const user: AuthUser = {
+    id: authData.user.id,
+    email: authData.user.email!,
+    fullName: authData.user.user_metadata?.full_name || authData.user.email!.split('@')[0],
+    avatarUrl: authData.user.user_metadata?.avatar_url,
+  };
 
   return {
-    user: response,
-    session: { userId: response.id },
+    user,
+    session: authData.session,
   };
 }
 
 /**
- * Sign out the current user
+ * Sign out the current user using Supabase
  */
 export async function signOut() {
-  localStorage.removeItem('userId');
+  const { error } = await supabase.auth.signOut();
+  
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 /**
- * Send password reset email
+ * Send password reset email using Supabase
  */
 export async function resetPassword(email: string) {
-  // TODO: Implement password reset functionality
-  throw new Error('Password reset not yet implemented');
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 /**
- * Update user password (after reset)
+ * Update user password using Supabase (after reset)
  */
 export async function updatePassword(newPassword: string) {
-  // TODO: Implement password update functionality
-  throw new Error('Password update not yet implemented');
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 /**
- * Resend verification email
+ * Resend verification email using Supabase
  */
 export async function resendVerificationEmail(email: string) {
-  // Email verification not needed for this implementation
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 /**
- * Get current session
+ * Get current session from Supabase
  */
 export async function getSession() {
-  const userId = localStorage.getItem('userId');
-  return userId ? { userId } : null;
+  const { data: { session } } = await supabase.auth.getSession();
+  return session;
 }
 
 /**
- * Get current user
+ * Get current user from Supabase
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  const userId = localStorage.getItem('userId');
+  const { data: { user } } = await supabase.auth.getUser();
   
-  if (!userId) {
+  if (!user) {
     return null;
   }
 
-  try {
-    const user = await apiRequest<LoginResponse>('GET', `/api/user/${userId}`);
-    return user || null;
-  } catch (error) {
-    // If user not found or error, clear the session
-    localStorage.removeItem('userId');
-    return null;
-  }
+  return {
+    id: user.id,
+    email: user.email!,
+    fullName: user.user_metadata?.full_name || user.email!.split('@')[0],
+    avatarUrl: user.user_metadata?.avatar_url,
+  };
 }
 
 /**
- * Sign in with Google OAuth
+ * Sign in with Google OAuth using Supabase
  */
 export async function signInWithGoogle() {
-  throw new Error('Google OAuth not yet implemented');
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/auth-callback`,
+    },
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 /**
- * Upload profile picture
+ * Upload profile picture using Supabase Storage
  */
 export async function uploadProfilePicture(file: File, userId: string) {
-  // TODO: Implement profile picture upload
-  throw new Error('Profile picture upload not yet implemented');
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}-${Date.now()}.${fileExt}`;
+  const filePath = `avatars/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(filePath, file);
+
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('avatars')
+    .getPublicUrl(filePath);
+
+  // Update user metadata with new avatar URL
+  const { error: updateError } = await supabase.auth.updateUser({
+    data: { avatar_url: publicUrl },
+  });
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  return publicUrl;
 }
 
 /**
- * Listen to auth state changes
+ * Listen to auth state changes using Supabase
  */
 export function onAuthStateChange(callback: (user: AuthUser | null) => void) {
-  // For localStorage-based auth, we'll check on an interval
-  let lastUserId = localStorage.getItem('userId');
-  
-  const checkAuth = async () => {
-    const currentUserId = localStorage.getItem('userId');
-    
-    if (lastUserId !== currentUserId) {
-      lastUserId = currentUserId;
-      if (currentUserId) {
-        const user = await getCurrentUser();
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    async (event, session) => {
+      if (session?.user) {
+        const user: AuthUser = {
+          id: session.user.id,
+          email: session.user.email!,
+          fullName: session.user.user_metadata?.full_name || session.user.email!.split('@')[0],
+          avatarUrl: session.user.user_metadata?.avatar_url,
+        };
         callback(user);
       } else {
         callback(null);
       }
     }
-  };
+  );
 
-  // Check every 500ms
-  const interval = setInterval(checkAuth, 500);
-
-  return {
-    unsubscribe: () => clearInterval(interval)
-  };
+  return subscription;
 }
