@@ -29,10 +29,7 @@ export interface LoginResponse {
  * Sign up a new user with email and password
  */
 export async function signUp(data: SignupData) {
-  const response = await apiRequest<LoginResponse>('/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
+  const response = await apiRequest<LoginResponse>('POST', '/api/auth/register', data);
 
   if (!response) {
     throw new Error('Failed to create user account');
@@ -52,10 +49,7 @@ export async function signUp(data: SignupData) {
  * Sign in with email and password
  */
 export async function signIn(data: LoginData) {
-  const response = await apiRequest<LoginResponse>('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
+  const response = await apiRequest<LoginResponse>('POST', '/api/auth/login', data);
 
   if (!response) {
     throw new Error('Failed to sign in');
@@ -119,7 +113,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   }
 
   try {
-    const user = await apiRequest<LoginResponse>(`/api/user/${userId}`);
+    const user = await apiRequest<LoginResponse>('GET', `/api/user/${userId}`);
     return user || null;
   } catch (error) {
     // If user not found or error, clear the session
