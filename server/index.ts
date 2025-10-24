@@ -55,35 +55,9 @@ app.use((req, res, next) => {
   next();
 });
 
-async function initializeDatabase() {
-  try {
-    if (!db) {
-      console.error("Database connection not available");
-      return;
-    }
-    
-    // Enable UUID extension
-    await db.execute(sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
-
-    // Check if tables exist, create basic ones if not
-    console.log("Checking database tables...");
-
-    // This will help identify missing tables
-    const result = await db.execute(sql`
-      SELECT table_name
-      FROM information_schema.tables
-      WHERE table_schema = 'public'
-    `);
-
-    console.log("Existing tables:", result.rows.map((r: any) => r.table_name));
-  } catch (error: any) {
-    console.error("Database initialization error:", error.message);
-  }
-}
-
 async function setupApp() {
-  // Initialize database tables
-  await initializeDatabase();
+  // Initialize database tables using the proper initialization function
+  await initDB();
 
   // Register routes - will handle WebSocket setup internally if not on Vercel
   const server = await registerRoutes(app);

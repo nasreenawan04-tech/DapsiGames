@@ -189,7 +189,42 @@ export async function initializeDatabase() {
       )
     `);
 
+    // Seed initial levels data
+    await db.execute(sql`
+      INSERT INTO levels (level_number, xp_required, title, badge_icon)
+      VALUES 
+        (1, 0, 'Beginner', '🌱'),
+        (2, 100, 'Novice', '🌿'),
+        (3, 300, 'Learner', '🍃'),
+        (4, 600, 'Student', '📚'),
+        (5, 1000, 'Scholar', '🎓'),
+        (6, 1500, 'Expert', '⭐'),
+        (7, 2100, 'Master', '🏆'),
+        (8, 2800, 'Champion', '👑'),
+        (9, 3600, 'Legend', '💎'),
+        (10, 5000, 'Ultimate', '🔥')
+      ON CONFLICT (level_number) DO NOTHING
+    `);
+
+    // Seed initial badges data
+    await db.execute(sql`
+      INSERT INTO badges (name, description, icon, requirement, category)
+      VALUES 
+        ('First Steps', 'Complete your first study session', 'Award', '1-study-session', 'achievement'),
+        ('Quick Learner', 'Complete 5 study sessions', 'Zap', '5-study-sessions', 'achievement'),
+        ('Dedicated Student', 'Complete 10 study sessions', 'BookOpen', '10-study-sessions', 'achievement'),
+        ('Fire Starter', 'Start a 3-day streak', 'Flame', '3-day-streak', 'streak'),
+        ('Hot Streak', 'Maintain a 7-day streak', 'Fire', '7-day-streak', 'streak'),
+        ('Unstoppable', 'Maintain a 30-day streak', 'Trophy', '30-day-streak', 'streak'),
+        ('Early Bird', 'Complete a session before 9 AM', 'Sunrise', 'early-riser', 'achievement'),
+        ('Night Owl', 'Complete a session after 10 PM', 'Moon', 'night-owl', 'achievement'),
+        ('Focus Master', 'Complete a 60-minute session', 'Target', 'focus-master', 'achievement'),
+        ('Century Club', 'Reach 100 total points', 'Star', '100-points', 'milestone')
+      ON CONFLICT (name) DO NOTHING
+    `);
+
     console.log("✓ Database tables initialized successfully");
+    console.log("✓ Seed data inserted successfully");
   } catch (error: any) {
     console.error("Database initialization error:", error.message);
   }
