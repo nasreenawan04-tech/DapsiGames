@@ -5,7 +5,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { setupSecurityMiddleware } from "./middleware/security";
 import { db } from "./db";
 import { sql } from "drizzle-orm";
-import { initializeDatabase } from "./init-db";
+import { initializeDatabase as initDB } from "./init-db";
 
 const app = express();
 
@@ -57,6 +57,11 @@ app.use((req, res, next) => {
 
 async function initializeDatabase() {
   try {
+    if (!db) {
+      console.error("Database connection not available");
+      return;
+    }
+    
     // Enable UUID extension
     await db.execute(sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
 
@@ -76,7 +81,7 @@ async function initializeDatabase() {
   }
 }
 
-(async () => {
+async function setupApp() {
   // Initialize database tables
   await initializeDatabase();
 
@@ -99,16 +104,33 @@ async function initializeDatabase() {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
+  return server;
+}
+
+// For Vercel serverless deployment
+let appPromise: Promise<any> | null = null;
+export default async function handler(req: any, res: any) {
+  if (!appPromise) {
+    appPromise = setupApp();
+  }
+  await appPromise;
+  return app(req, res);
+}
+
+// For local development and traditional hosting
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  setupApp().then((server) => {
+    // ALWAYS serve the app on the port specified in the environment variable PORT
+    // Other ports are firewalled. Default to 5000 if not specified.
+    // this serves both the API and the client.
+    // It is the only port that is not firewalled.
+    const port = parseInt(process.env.PORT || '5000', 10);
+    server.listen({
+      port,
+      host: "0.0.0.0",
+      reusePort: true,
+    }, () => {
+      log(`serving on port ${port}`);
+    });
   });
-})();
+}
