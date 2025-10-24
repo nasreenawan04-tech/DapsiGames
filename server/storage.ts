@@ -579,7 +579,9 @@ export class MemStorage implements IStorage {
       ...insertTask,
       id,
       description: insertTask.description ?? null,
-      deadline: insertTask.deadline ?? null,
+      deadline: insertTask.deadline 
+        ? (typeof insertTask.deadline === 'string' ? new Date(insertTask.deadline) : insertTask.deadline)
+        : null,
       completed: false,
       createdAt: new Date(),
       completedAt: null,
