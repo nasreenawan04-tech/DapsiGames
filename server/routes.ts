@@ -74,6 +74,7 @@ import { healthCheck } from "./middleware/health";
 import { cacheMiddleware } from "./middleware/cache";
 import { validateRegistration, validateLogin } from "./middleware/validation";
 import { requireAuth, optionalAuth, type AuthRequest } from "./middleware/auth";
+import { auth as firebaseAdminAuth } from "./lib/firebaseAdmin";
 
 const SALT_ROUNDS = 10;
 
@@ -296,28 +297,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const idToken = authHeader.split('Bearer ')[1];
-      const { fullName, email } = req.body;
+      const { fullName } = req.body;
 
-      if (!fullName || !email) {
-        return res.status(400).json({ error: "Full name and email required" });
+      if (!fullName) {
+        return res.status(400).json({ error: "Full name required" });
+      }
+
+      // Verify Firebase ID token
+      let decodedToken;
+      try {
+        decodedToken = await firebaseAdminAuth.verifyIdToken(idToken);
+      } catch (error) {
+        console.error('Firebase token verification failed:', error);
+        return res.status(401).json({ error: "Invalid Firebase token" });
+      }
+
+      const email = decodedToken.email;
+      if (!email) {
+        return res.status(400).json({ error: "Email not found in Firebase token" });
       }
 
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
 
       if (existingUser) {
-        // User exists, just create session
-        req.session.userId = existingUser.id;
-        
-        await new Promise<void>((resolve, reject) => {
+        // User exists, regenerate session for security
+        req.session.regenerate((err) => {
+          if (err) {
+            return res.status(500).json({ error: "Session creation failed" });
+          }
+          
+          req.session.userId = existingUser.id;
+          
           req.session.save((err) => {
-            if (err) reject(err);
-            else resolve();
+            if (err) {
+              return res.status(500).json({ error: "Session save failed" });
+            }
+            
+            const { password: _, ...userWithoutPassword } = existingUser;
+            res.json(userWithoutPassword);
           });
         });
-
-        const { password: _, ...userWithoutPassword } = existingUser;
-        return res.json(userWithoutPassword);
+        return;
       }
 
       // Create new user (no password needed for Firebase auth)
@@ -398,18 +419,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Create session
-      req.session.userId = newUser.id;
-      
-      await new Promise<void>((resolve, reject) => {
+      // Regenerate session for security
+      req.session.regenerate((err) => {
+        if (err) {
+          return res.status(500).json({ error: "Session creation failed" });
+        }
+        
+        req.session.userId = newUser.id;
+        
         req.session.save((err) => {
-          if (err) reject(err);
-          else resolve();
+          if (err) {
+            return res.status(500).json({ error: "Session save failed" });
+          }
+          
+          const { password: _, ...userWithoutPassword } = newUser;
+          res.json(userWithoutPassword);
         });
       });
-
-      const { password: _, ...userWithoutPassword } = newUser;
-      res.json(userWithoutPassword);
     } catch (error: any) {
       console.error('Firebase register error:', error);
       res.status(400).json({ error: error.message || 'Failed to register user' });
@@ -427,25 +453,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const idToken = authHeader.split('Bearer ')[1];
       
-      // In a production app, you would verify the Firebase ID token here
-      // For now, we'll extract the email from the token payload (base64 decode)
-      // In production, use Firebase Admin SDK to verify: admin.auth().verifyIdToken(idToken)
-      
-      // Get user from session or create one
-      const firebaseUser = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.VITE_FIREBASE_API_KEY}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ idToken }),
-      });
-
-      if (!firebaseUser.ok) {
+      // Verify Firebase ID token using Firebase Admin SDK
+      let decodedToken;
+      try {
+        decodedToken = await firebaseAdminAuth.verifyIdToken(idToken);
+      } catch (error) {
+        console.error('Firebase token verification failed:', error);
         return res.status(401).json({ error: "Invalid Firebase token" });
       }
 
-      const firebaseData = await firebaseUser.json();
-      const email = firebaseData.users[0].email;
+      const email = decodedToken.email;
+      if (!email) {
+        return res.status(400).json({ error: "Email not found in Firebase token" });
+      }
 
       const user = await storage.getUserByEmail(email);
 
@@ -453,18 +473,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found. Please sign up first." });
       }
 
-      // Create session
-      req.session.userId = user.id;
-      
-      await new Promise<void>((resolve, reject) => {
+      // Regenerate session for security
+      req.session.regenerate((err) => {
+        if (err) {
+          return res.status(500).json({ error: "Session creation failed" });
+        }
+        
+        req.session.userId = user.id;
+        
         req.session.save((err) => {
-          if (err) reject(err);
-          else resolve();
+          if (err) {
+            return res.status(500).json({ error: "Session save failed" });
+          }
+          
+          const { password: _, ...userWithoutPassword } = user;
+          res.json(userWithoutPassword);
         });
       });
-
-      const { password: _, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
     } catch (error: any) {
       console.error('Firebase login error:', error);
       res.status(400).json({ error: error.message || 'Failed to login' });
