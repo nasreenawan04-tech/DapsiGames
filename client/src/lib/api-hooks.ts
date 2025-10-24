@@ -4,17 +4,39 @@ import type { User, Game, StudyMaterial, UserActivity, Bookmark } from "@shared/
 
 // Real-time websocket connection for leaderboard updates
 let ws: WebSocket | null = null;
+let wsAttempts = 0;
+const MAX_WS_ATTEMPTS = 3;
 
 export function connectWebSocket() {
+  // Skip WebSocket in serverless/production environments where it's not supported
   if (typeof window === "undefined") return;
   if (ws?.readyState === WebSocket.OPEN) return;
+  
+  // Don't retry indefinitely if WebSocket is not available
+  if (wsAttempts >= MAX_WS_ATTEMPTS) {
+    console.log("WebSocket not available - using polling mode");
+    return;
+  }
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
+  
+  // Skip WebSocket if host is not properly set (serverless environment)
+  if (!host || host.includes("undefined")) {
+    console.log("WebSocket not available in this environment");
+    return;
+  }
+  
   const wsUrl = `${protocol}//${host}/ws`;
   
   try {
     ws = new WebSocket(wsUrl);
+    wsAttempts++;
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+      wsAttempts = 0; // Reset attempts on successful connection
+    };
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -25,14 +47,19 @@ export function connectWebSocket() {
     };
 
     ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
+      console.log("WebSocket connection failed - continuing without real-time updates");
     };
 
     ws.onclose = () => {
-      setTimeout(connectWebSocket, 3000);
+      ws = null;
+      // Only retry if we haven't exceeded max attempts
+      if (wsAttempts < MAX_WS_ATTEMPTS) {
+        setTimeout(connectWebSocket, 5000);
+      }
     };
   } catch (error) {
-    console.error("Failed to connect WebSocket:", error);
+    console.log("WebSocket not supported in this environment");
+    wsAttempts = MAX_WS_ATTEMPTS; // Stop trying
   }
 }
 
