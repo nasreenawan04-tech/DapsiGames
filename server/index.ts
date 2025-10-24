@@ -1,4 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import MemoryStore from "memorystore";
 import { storage } from "./storage";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -13,9 +15,32 @@ app.set('trust proxy', 1);
 
 setupSecurityMiddleware(app);
 
+const MemoryStoreSession = MemoryStore(session);
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'dapsigames-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  store: new MemoryStoreSession({
+    checkPeriod: 86400000
+  }),
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    sameSite: 'lax'
+  }
+}));
+
 declare module 'http' {
   interface IncomingMessage {
     rawBody: unknown
+  }
+}
+
+declare module 'express-session' {
+  interface SessionData {
+    userId?: string;
   }
 }
 app.use(express.json({

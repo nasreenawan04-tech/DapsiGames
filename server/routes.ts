@@ -181,6 +181,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { password, ...userWithoutPassword } = newUser;
+      
+      // Store user ID in session
+      req.session.userId = newUser.id;
+      
       res.json(userWithoutPassword);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -206,6 +210,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!validPassword) {
         return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // Store user ID in session
+      req.session.userId = user.id;
+
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Logout user
+  app.post("/api/auth/logout", async (req: Request, res: Response) => {
+    try {
+      req.session.destroy((err) => {
+        if (err) {
+          return res.status(500).json({ error: "Failed to logout" });
+        }
+        res.clearCookie('connect.sid');
+        res.json({ success: true });
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get current authenticated user
+  app.get("/api/auth/me", async (req: Request, res: Response) => {
+    try {
+      const userId = req.session.userId;
+
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
       }
 
       const { password: _, ...userWithoutPassword } = user;
