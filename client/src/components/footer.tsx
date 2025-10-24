@@ -44,7 +44,7 @@ export function Footer() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
                 <Link href="/about">
-                  <span className="hover:text-foreground transition-colors cursor-pointer" data-testid="https://replit.com/@piyohah692/DapsiGames#client/src/pages/about.tsx">About Us</span>
+                  <span className="hover:text-foreground transition-colors cursor-pointer" data-testid="link-footer-about">About Us</span>
                 </Link>
               </li>
               <li>
