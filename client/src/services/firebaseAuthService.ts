@@ -14,6 +14,10 @@ import { AuthUser, SignupData, LoginData } from "./authService";
  * Then sync with backend database
  */
 export async function firebaseSignUp(data: SignupData) {
+  if (!auth) {
+    throw new Error('Firebase is not configured. Please set up Firebase environment variables.');
+  }
+
   try {
     // Create user in Firebase
     const userCredential = await createUserWithEmailAndPassword(
@@ -74,6 +78,10 @@ export async function firebaseSignUp(data: SignupData) {
  * Then sync session with backend
  */
 export async function firebaseSignIn(data: LoginData) {
+  if (!auth) {
+    throw new Error('Firebase is not configured. Please set up Firebase environment variables.');
+  }
+
   try {
     // Sign in with Firebase
     const userCredential = await signInWithEmailAndPassword(
@@ -123,6 +131,10 @@ export async function firebaseSignIn(data: LoginData) {
  * Sign out from Firebase and backend
  */
 export async function firebaseSignOutUser() {
+  if (!auth) {
+    throw new Error('Firebase is not configured. Please set up Firebase environment variables.');
+  }
+
   try {
     // Sign out from Firebase
     await firebaseSignOut(auth);
@@ -142,8 +154,13 @@ export async function firebaseSignOutUser() {
  * Get current Firebase user and sync with backend
  */
 export async function firebaseGetCurrentUser(): Promise<AuthUser | null> {
+  if (!auth) {
+    console.warn('Firebase is not configured');
+    return null;
+  }
+
   return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth!, async (firebaseUser) => {
       unsubscribe();
 
       if (!firebaseUser) {
@@ -183,6 +200,12 @@ export async function firebaseGetCurrentUser(): Promise<AuthUser | null> {
  * Listen to Firebase auth state changes
  */
 export function onFirebaseAuthStateChange(callback: (user: AuthUser | null) => void) {
+  if (!auth) {
+    console.warn('Firebase is not configured');
+    callback(null);
+    return () => {};
+  }
+
   return onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
     if (!firebaseUser) {
       callback(null);
