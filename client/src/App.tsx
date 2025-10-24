@@ -18,6 +18,10 @@ import Signup from "@/pages/signup";
 import ForgotPassword from "@/pages/forgot-password";
 import AuthCallback from "@/pages/auth-callback";
 import ResetPassword from "@/pages/reset-password";
+import About from "@/pages/about";
+import Contact from "@/pages/contact";
+import PrivacyPolicy from "@/pages/privacy-policy";
+import TermsOfService from "@/pages/terms-of-service";
 
 import {
   LazyDashboard,
@@ -88,6 +92,10 @@ function Router() {
               {() => <ProtectedRoute><Subscribe /></ProtectedRoute>}
             </Route>
             <Route path="/guest" component={LazyGuest} />
+            <Route path="/about" component={About} />
+            <Route path="/contact" component={Contact} />
+            <Route path="/privacy-policy" component={PrivacyPolicy} />
+            <Route path="/terms-of-service" component={TermsOfService} />
             <Route component={NotFound} />
           </Switch>
         </Suspense>

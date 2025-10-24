@@ -43,16 +43,24 @@ export function Footer() {
             <h3 className="font-semibold mb-3">Company</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-about">About Us</a>
+                <Link href="/about">
+                  <span className="hover:text-foreground transition-colors cursor-pointer" data-testid="https://replit.com/@piyohah692/DapsiGames#client/src/pages/about.tsx">About Us</span>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-contact">Contact</a>
+                <Link href="/contact">
+                  <span className="hover:text-foreground transition-colors cursor-pointer" data-testid="link-footer-contact">Contact</span>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-privacy">Privacy Policy</a>
+                <Link href="/privacy-policy">
+                  <span className="hover:text-foreground transition-colors cursor-pointer" data-testid="link-footer-privacy">Privacy Policy</span>
+                </Link>
               </li>
               <li>
-                <a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-terms">Terms of Service</a>
+                <Link href="/terms-of-service">
+                  <span className="hover:text-foreground transition-colors cursor-pointer" data-testid="link-footer-terms">Terms of Service</span>
+                </Link>
               </li>
             </ul>
           </div>
