@@ -286,6 +286,191 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Firebase Authentication - Register
+  app.post("/api/auth/firebase-register", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: "No Firebase token provided" });
+      }
+
+      const idToken = authHeader.split('Bearer ')[1];
+      const { fullName, email } = req.body;
+
+      if (!fullName || !email) {
+        return res.status(400).json({ error: "Full name and email required" });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+
+      if (existingUser) {
+        // User exists, just create session
+        req.session.userId = existingUser.id;
+        
+        await new Promise<void>((resolve, reject) => {
+          req.session.save((err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+
+        const { password: _, ...userWithoutPassword } = existingUser;
+        return res.json(userWithoutPassword);
+      }
+
+      // Create new user (no password needed for Firebase auth)
+      const newUser = await storage.createUser({
+        email,
+        fullName,
+        password: '', // Empty password for Firebase users
+      });
+
+      // Initialize user stats and related data
+      if (db) {
+        try {
+          // Initialize user stats
+          const existingStats = await db
+            .select()
+            .from(userStats)
+            .where(eq(userStats.userId, newUser.id))
+            .limit(1);
+
+          if (existingStats.length === 0) {
+            await db.insert(userStats).values({
+              userId: newUser.id,
+              totalPoints: 0,
+              currentRank: 0,
+              gamesPlayed: 0,
+              studySessions: 0,
+            });
+          }
+
+          // Initialize streak
+          const existingStreak = await db
+            .select()
+            .from(streaks)
+            .where(eq(streaks.userId, newUser.id))
+            .limit(1);
+
+          if (existingStreak.length === 0) {
+            await db.insert(streaks).values({
+              userId: newUser.id,
+              currentStreak: 0,
+              longestStreak: 0,
+            });
+          }
+
+          // Initialize user coins
+          const existingCoins = await db
+            .select()
+            .from(userCoins)
+            .where(eq(userCoins.userId, newUser.id))
+            .limit(1);
+
+          if (existingCoins.length === 0) {
+            await db.insert(userCoins).values({
+              userId: newUser.id,
+              balance: 0,
+              totalEarned: 0,
+              totalSpent: 0,
+            });
+          }
+
+          // Initialize user level
+          const existingLevel = await db
+            .select()
+            .from(userLevels)
+            .where(eq(userLevels.userId, newUser.id))
+            .limit(1);
+
+          if (existingLevel.length === 0) {
+            await db.insert(userLevels).values({
+              userId: newUser.id,
+              currentLevel: 1,
+              currentXp: 0,
+              totalXp: 0,
+            });
+          }
+        } catch (dbError) {
+          console.error('Error initializing user data:', dbError);
+        }
+      }
+
+      // Create session
+      req.session.userId = newUser.id;
+      
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      const { password: _, ...userWithoutPassword } = newUser;
+      res.json(userWithoutPassword);
+    } catch (error: any) {
+      console.error('Firebase register error:', error);
+      res.status(400).json({ error: error.message || 'Failed to register user' });
+    }
+  });
+
+  // Firebase Authentication - Login
+  app.post("/api/auth/firebase-login", async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: "No Firebase token provided" });
+      }
+
+      const idToken = authHeader.split('Bearer ')[1];
+      
+      // In a production app, you would verify the Firebase ID token here
+      // For now, we'll extract the email from the token payload (base64 decode)
+      // In production, use Firebase Admin SDK to verify: admin.auth().verifyIdToken(idToken)
+      
+      // Get user from session or create one
+      const firebaseUser = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.VITE_FIREBASE_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (!firebaseUser.ok) {
+        return res.status(401).json({ error: "Invalid Firebase token" });
+      }
+
+      const firebaseData = await firebaseUser.json();
+      const email = firebaseData.users[0].email;
+
+      const user = await storage.getUserByEmail(email);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found. Please sign up first." });
+      }
+
+      // Create session
+      req.session.userId = user.id;
+      
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error: any) {
+      console.error('Firebase login error:', error);
+      res.status(400).json({ error: error.message || 'Failed to login' });
+    }
+  });
+
   // ===== User Routes =====
 
   // Get current user

@@ -1,3 +1,11 @@
+import {
+  firebaseSignUp,
+  firebaseSignIn,
+  firebaseSignOutUser,
+  firebaseGetCurrentUser,
+  onFirebaseAuthStateChange,
+} from './firebaseAuthService';
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -25,116 +33,35 @@ export interface LoginResponse {
   points?: number;
 }
 
-const API_BASE = '/api';
-
 /**
- * Sign up a new user with email and password using backend API
+ * Sign up a new user with Firebase Authentication
  */
 export async function signUp(data: SignupData) {
-  const response = await fetch(`${API_BASE}/auth/register`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-    credentials: 'include',
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to create account');
-  }
-
-  const userData = await response.json();
-
-  const user: AuthUser = {
-    id: userData.id,
-    email: userData.email,
-    fullName: userData.fullName,
-    avatarUrl: userData.avatarUrl,
-    points: userData.points || 0,
-  };
-
-  return {
-    user,
-    needsEmailVerification: false,
-  };
+  return await firebaseSignUp(data);
 }
 
 /**
- * Sign in with email and password using backend API
+ * Sign in with Firebase Authentication
  */
 export async function signIn(data: LoginData) {
-  const response = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-    credentials: 'include',
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to sign in');
-  }
-
-  const userData = await response.json();
-
-  const user: AuthUser = {
-    id: userData.id,
-    email: userData.email,
-    fullName: userData.fullName,
-    avatarUrl: userData.avatarUrl,
-    points: userData.points || 0,
-  };
-
-  return {
-    user,
-  };
+  return await firebaseSignIn(data);
 }
 
 /**
- * Sign out the current user
+ * Sign out from Firebase and backend
  */
 export async function signOut() {
-  const response = await fetch(`${API_BASE}/auth/logout`, {
-    method: 'POST',
-    credentials: 'include',
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to sign out');
-  }
+  await firebaseSignOutUser();
 }
 
 /**
- * Get current authenticated user
+ * Get current authenticated user from Firebase
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  try {
-    const response = await fetch(`${API_BASE}/auth/me`, {
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const userData = await response.json();
-
-    return {
-      id: userData.id,
-      email: userData.email,
-      fullName: userData.fullName,
-      avatarUrl: userData.avatarUrl,
-      points: userData.points || 0,
-    };
-  } catch (error) {
-    console.error('Error fetching current user:', error);
-    return null;
-  }
+  return await firebaseGetCurrentUser();
 }
+
+const API_BASE = '/api';
 
 /**
  * Send password reset email
@@ -199,9 +126,5 @@ export async function uploadProfilePicture(file: File, userId: string) {
  * Auth state change callback type
  */
 export function onAuthStateChange(callback: (user: AuthUser | null) => void) {
-  // For backend API, we can poll or use websockets
-  // For now, return a no-op subscription since the auth state is managed in the AuthContext
-  return {
-    unsubscribe: () => {},
-  };
+  return onFirebaseAuthStateChange(callback);
 }
