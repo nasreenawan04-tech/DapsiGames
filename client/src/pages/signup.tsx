@@ -1,19 +1,15 @@
-import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Trophy, Mail, Lock, User } from "lucide-react";
-import { SiGoogle } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import { signInWithGoogle } from "@/services/authService";
 import {
   Form,
   FormControl,
@@ -23,7 +19,6 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form";
-import EmailVerification from "./email-verification";
 
 const signupSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters"),
@@ -61,9 +56,6 @@ function getPasswordStrength(password: string): { strength: number; label: strin
 export default function Signup() {
   const { register } = useAuth();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
-  const [showVerification, setShowVerification] = useState(false);
-  const [registeredEmail, setRegisteredEmail] = useState("");
   
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -81,21 +73,12 @@ export default function Signup() {
 
   const onSubmit = async (data: SignupFormValues) => {
     try {
-      const result = await register(data.fullName, data.email, data.password);
+      await register(data.fullName, data.email, data.password);
       
-      if (result.needsEmailVerification) {
-        setRegisteredEmail(data.email);
-        setShowVerification(true);
-        toast({
-          title: "Account created!",
-          description: "Please check your email to verify your account.",
-        });
-      } else {
-        toast({
-          title: "Welcome to DapsiGames!",
-          description: "Your account has been created successfully.",
-        });
-      }
+      toast({
+        title: "Welcome to DapsiGames!",
+        description: "Your account has been created successfully.",
+      });
     } catch (error: any) {
       toast({
         title: "Registration failed",
@@ -104,22 +87,6 @@ export default function Signup() {
       });
     }
   };
-
-  const handleGoogleSignup = async () => {
-    try {
-      await signInWithGoogle();
-    } catch (error: any) {
-      toast({
-        title: "Google signup failed",
-        description: error.message || "Please try again",
-        variant: "destructive",
-      });
-    }
-  };
-
-  if (showVerification) {
-    return <EmailVerification email={registeredEmail} />;
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-secondary/5 to-accent/5 px-4 py-12">
@@ -288,29 +255,6 @@ export default function Signup() {
               </Button>
             </form>
           </Form>
-
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <Separator />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">
-                  Or continue with
-                </span>
-              </div>
-            </div>
-
-            <Button
-              variant="outline"
-              className="w-full mt-4"
-              onClick={handleGoogleSignup}
-              data-testid="button-google-signup"
-            >
-              <SiGoogle className="mr-2 h-4 w-4" />
-              Continue with Google
-            </Button>
-          </div>
 
           <div className="mt-6 text-center text-sm">
             <span className="text-muted-foreground">Already have an account? </span>
