@@ -271,6 +271,10 @@ export class MemStorage implements IStorage {
       points: 0,
       rank: null,
       avatarUrl: null,
+      stripeCustomerId: insertUser.stripeCustomerId ?? null,
+      stripeSubscriptionId: insertUser.stripeSubscriptionId ?? null,
+      isPro: insertUser.isPro ?? false,
+      subscriptionStatus: insertUser.subscriptionStatus ?? null,
       createdAt: new Date(),
     };
     this.users.set(id, user);
@@ -574,6 +578,8 @@ export class MemStorage implements IStorage {
     const task: Task = {
       ...insertTask,
       id,
+      description: insertTask.description ?? null,
+      deadline: insertTask.deadline ?? null,
       completed: false,
       createdAt: new Date(),
       completedAt: null,
@@ -626,6 +632,7 @@ export class MemStorage implements IStorage {
     const session: StudySession = {
       ...insertSession,
       id,
+      ambientSound: insertSession.ambientSound ?? null,
       xpEarned: 0,
       completed: false,
       startedAt: new Date(),
@@ -824,6 +831,9 @@ export class MemStorage implements IStorage {
     const group: Group = {
       ...insertGroup,
       id,
+      avatarUrl: insertGroup.avatarUrl ?? null,
+      description: insertGroup.description ?? null,
+      isPublic: insertGroup.isPublic ?? true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -854,6 +864,7 @@ export class MemStorage implements IStorage {
     const member: GroupMember = {
       ...insertMember,
       id,
+      role: insertMember.role ?? "member",
       joinedAt: new Date(),
     };
     this.groupMembers.set(id, member);
@@ -929,6 +940,7 @@ export class MemStorage implements IStorage {
       id,
       userId,
       duration: durationMinutes,
+      ambientSound: null,
       xpEarned: 0,
       completed: false,
       startedAt: new Date(),
