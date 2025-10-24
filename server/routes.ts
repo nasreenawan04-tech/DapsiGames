@@ -79,7 +79,14 @@ const SALT_ROUNDS = 10;
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
-  setupWebSocket(httpServer);
+  
+  // Only setup WebSocket if not running on Vercel (serverless doesn't support WebSockets)
+  if (!process.env.VERCEL) {
+    setupWebSocket(httpServer);
+    console.log('WebSocket server initialized');
+  } else {
+    console.log('Running on Vercel - WebSocket disabled');
+  }
 
   app.get("/api/health", healthCheck);
   // ===== Authentication Routes =====

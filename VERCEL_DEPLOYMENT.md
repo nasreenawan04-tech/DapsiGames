@@ -12,9 +12,18 @@ This document summarizes the changes made to make DapsiGames Vercel-friendly.
 Modified `server/index.ts` to support both traditional hosting and Vercel's serverless environment:
 
 - Created `setupApp()` function to initialize the Express app
-- Added `handler` export for Vercel serverless functions
+- Added async `handler` export for Vercel serverless functions with proper error handling
 - Conditional server startup: runs traditional server locally, exports handler for Vercel
 - Fixed LSP errors (removed duplicate imports, added null checks)
+- Added initialization promise to ensure app is ready before handling requests
+
+### 3. WebSocket Configuration (Critical Fix)
+Modified `server/routes.ts` to conditionally skip WebSocket setup on Vercel:
+
+- Added environment check: `if (!process.env.VERCEL)`
+- WebSocket only initializes in local/traditional hosting environments
+- Prevents "FUNCTION_INVOCATION_FAILED" error on Vercel
+- Logs appropriate message for each environment
 
 ### 3. Vercel Configuration Files
 

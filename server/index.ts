@@ -85,6 +85,7 @@ async function setupApp() {
   // Initialize database tables
   await initializeDatabase();
 
+  // Register routes - will handle WebSocket setup internally if not on Vercel
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -107,18 +108,42 @@ async function setupApp() {
   return server;
 }
 
-// For Vercel serverless deployment
-let appPromise: Promise<any> | null = null;
-export default async function handler(req: any, res: any) {
-  if (!appPromise) {
-    appPromise = setupApp();
+// For Vercel serverless deployment - initialize once and export the app
+let appInitialized = false;
+let appReadyPromise: Promise<any> | null = null;
+
+async function ensureAppInitialized() {
+  if (!appInitialized) {
+    if (!appReadyPromise) {
+      // Use the same setupApp function - it now handles Vercel environment
+      appReadyPromise = setupApp().then(() => {
+        appInitialized = true;
+      }).catch((error) => {
+        console.error('Failed to initialize app:', error);
+        appInitialized = false;
+        appReadyPromise = null;
+        throw error;
+      });
+    }
+    await appReadyPromise;
   }
-  await appPromise;
-  return app(req, res);
 }
 
+// Export for Vercel - the app itself with initialization wrapper
+export default async (req: any, res: any) => {
+  try {
+    await ensureAppInitialized();
+    app(req, res);
+  } catch (error) {
+    console.error('Vercel handler error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal Server Error', message: String(error) });
+    }
+  }
+};
+
 // For local development and traditional hosting
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+if (!process.env.VERCEL) {
   setupApp().then((server) => {
     // ALWAYS serve the app on the port specified in the environment variable PORT
     // Other ports are firewalled. Default to 5000 if not specified.
