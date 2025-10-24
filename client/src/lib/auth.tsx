@@ -5,7 +5,6 @@ import {
   signUp,
   signOut,
   getCurrentUser,
-  onAuthStateChange,
   type AuthUser,
 } from "@/services/authService";
 import { getRedirectPath } from "./redirectAfterAuth";
@@ -16,6 +15,7 @@ interface AuthContextType {
   register: (fullName: string, email: string, password: string) => Promise<{ needsEmailVerification: boolean }>;
   logout: () => Promise<void>;
   isLoading: boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,6 +24,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [, setLocation] = useLocation();
+
+  const refreshUser = async () => {
+    try {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+      setUser(null);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -45,14 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initAuth();
 
-    const subscription = onAuthStateChange((authUser) => {
-      if (!mounted) return;
-      setUser(authUser);
-    });
-
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
   }, []);
 
@@ -89,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, isLoading, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
