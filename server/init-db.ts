@@ -141,19 +141,19 @@ export async function initializeDatabase() {
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         level_number INTEGER UNIQUE NOT NULL,
         xp_required INTEGER NOT NULL,
-        title VARCHAR NOT NULL,
-        badge_icon VARCHAR
+        title TEXT NOT NULL,
+        rewards TEXT
       )
     `);
 
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS badges (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR NOT NULL,
-        description TEXT,
-        icon VARCHAR,
-        category VARCHAR,
-        xp_requirement INTEGER DEFAULT 0
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        icon TEXT NOT NULL,
+        requirement TEXT NOT NULL,
+        category TEXT NOT NULL
       )
     `);
 
@@ -189,39 +189,88 @@ export async function initializeDatabase() {
       )
     `);
 
-    // Seed initial levels data
-    await db.execute(sql`
-      INSERT INTO levels (level_number, xp_required, title, badge_icon)
-      VALUES 
-        (1, 0, 'Beginner', '🌱'),
-        (2, 100, 'Novice', '🌿'),
-        (3, 300, 'Learner', '🍃'),
-        (4, 600, 'Student', '📚'),
-        (5, 1000, 'Scholar', '🎓'),
-        (6, 1500, 'Expert', '⭐'),
-        (7, 2100, 'Master', '🏆'),
-        (8, 2800, 'Champion', '👑'),
-        (9, 3600, 'Legend', '💎'),
-        (10, 5000, 'Ultimate', '🔥')
-      ON CONFLICT (level_number) DO NOTHING
-    `);
+    // Fix existing tables if they have wrong schema
+    try {
+      // Add rewards column to levels if it doesn't exist
+      await db.execute(sql`
+        ALTER TABLE levels ADD COLUMN IF NOT EXISTS rewards TEXT
+      `);
+      
+      // Fix badges table - rename xp_requirement to requirement if needed
+      const badgesColumns = await db.execute(sql`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'badges'
+      `);
+      const badgeColumnNames = badgesColumns.rows.map((r: any) => r.column_name);
+      
+      if (badgeColumnNames.includes('xp_requirement') && !badgeColumnNames.includes('requirement')) {
+        // Drop the old column and create new one with correct type
+        await db.execute(sql`
+          ALTER TABLE badges DROP COLUMN IF EXISTS xp_requirement
+        `);
+        await db.execute(sql`
+          ALTER TABLE badges ADD COLUMN IF NOT EXISTS requirement TEXT NOT NULL DEFAULT ''
+        `);
+      } else if (!badgeColumnNames.includes('requirement')) {
+        await db.execute(sql`
+          ALTER TABLE badges ADD COLUMN requirement TEXT NOT NULL DEFAULT ''
+        `);
+      }
+      
+      // Ensure requirement column is TEXT not INTEGER
+      await db.execute(sql`
+        ALTER TABLE badges ALTER COLUMN requirement TYPE TEXT USING requirement::text
+      `);
+    } catch (error: any) {
+      console.log("Schema migration skipped:", error.message);
+    }
 
-    // Seed initial badges data
-    await db.execute(sql`
-      INSERT INTO badges (name, description, icon, requirement, category)
-      VALUES 
-        ('First Steps', 'Complete your first study session', 'Award', '1-study-session', 'achievement'),
-        ('Quick Learner', 'Complete 5 study sessions', 'Zap', '5-study-sessions', 'achievement'),
-        ('Dedicated Student', 'Complete 10 study sessions', 'BookOpen', '10-study-sessions', 'achievement'),
-        ('Fire Starter', 'Start a 3-day streak', 'Flame', '3-day-streak', 'streak'),
-        ('Hot Streak', 'Maintain a 7-day streak', 'Fire', '7-day-streak', 'streak'),
-        ('Unstoppable', 'Maintain a 30-day streak', 'Trophy', '30-day-streak', 'streak'),
-        ('Early Bird', 'Complete a session before 9 AM', 'Sunrise', 'early-riser', 'achievement'),
-        ('Night Owl', 'Complete a session after 10 PM', 'Moon', 'night-owl', 'achievement'),
-        ('Focus Master', 'Complete a 60-minute session', 'Target', 'focus-master', 'achievement'),
-        ('Century Club', 'Reach 100 total points', 'Star', '100-points', 'milestone')
-      ON CONFLICT (name) DO NOTHING
-    `);
+    // Seed initial levels data - only if table is empty
+    try {
+      const existingLevels = await db.execute(sql`SELECT COUNT(*) FROM levels`);
+      if (existingLevels.rows[0].count === 0 || existingLevels.rows[0].count === '0') {
+        await db.execute(sql`
+          INSERT INTO levels (level_number, xp_required, title, rewards)
+          VALUES 
+            (1, 0, 'Novice', '{"coins": 0}'),
+            (2, 100, 'Learner', '{"coins": 100}'),
+            (3, 250, 'Student', '{"coins": 100}'),
+            (4, 500, 'Scholar', '{"coins": 100}'),
+            (5, 1000, 'Expert', '{"coins": 100}'),
+            (6, 2000, 'Master', '{"coins": 150}'),
+            (7, 3500, 'Sage', '{"coins": 150}'),
+            (8, 5000, 'Guru', '{"coins": 200}'),
+            (9, 7500, 'Legend', '{"coins": 200}'),
+            (10, 10000, 'Grandmaster', '{"coins": 250}')
+        `);
+      }
+    } catch (error: any) {
+      console.log("Levels seeding skipped:", error.message);
+    }
+
+    // Seed initial badges data - only if table is empty
+    try {
+      const existingBadges = await db.execute(sql`SELECT COUNT(*) FROM badges`);
+      if (existingBadges.rows[0].count === 0 || existingBadges.rows[0].count === '0') {
+        await db.execute(sql`
+          INSERT INTO badges (name, description, icon, requirement, category)
+          VALUES 
+            ('First Steps', 'Complete your first study session', 'Award', '1-study-session', 'achievement'),
+            ('Quick Learner', 'Complete 5 study sessions', 'Zap', '5-study-sessions', 'achievement'),
+            ('Dedicated Student', 'Complete 10 study sessions', 'BookOpen', '10-study-sessions', 'achievement'),
+            ('Fire Starter', 'Start a 3-day streak', 'Flame', '3-day-streak', 'streak'),
+            ('Hot Streak', 'Maintain a 7-day streak', 'Fire', '7-day-streak', 'streak'),
+            ('Unstoppable', 'Maintain a 30-day streak', 'Trophy', '30-day-streak', 'streak'),
+            ('Early Bird', 'Complete a session before 9 AM', 'Sunrise', 'early-riser', 'achievement'),
+            ('Night Owl', 'Complete a session after 10 PM', 'Moon', 'night-owl', 'achievement'),
+            ('Focus Master', 'Complete a 60-minute session', 'Target', 'focus-master', 'achievement'),
+            ('Century Club', 'Reach 100 total points', 'Star', '100-points', 'milestone')
+        `);
+      }
+    } catch (error: any) {
+      console.log("Badges seeding skipped:", error.message);
+    }
 
     console.log("✓ Database tables initialized successfully");
     console.log("✓ Seed data inserted successfully");
