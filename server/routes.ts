@@ -182,10 +182,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { password, ...userWithoutPassword } = newUser;
       
-      // Store user ID in session
-      req.session.userId = newUser.id;
-      
-      res.json(userWithoutPassword);
+      // Regenerate session to prevent session fixation
+      req.session.regenerate((err) => {
+        if (err) {
+          return res.status(500).json({ error: "Session creation failed" });
+        }
+        
+        // Store user ID in new session
+        req.session.userId = newUser.id;
+        
+        // Save session before responding
+        req.session.save((err) => {
+          if (err) {
+            return res.status(500).json({ error: "Session save failed" });
+          }
+          res.json(userWithoutPassword);
+        });
+      });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -212,11 +225,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
-      // Store user ID in session
-      req.session.userId = user.id;
-
-      const { password: _, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+      // Regenerate session to prevent session fixation
+      req.session.regenerate((err) => {
+        if (err) {
+          return res.status(500).json({ error: "Session creation failed" });
+        }
+        
+        // Store user ID in new session
+        req.session.userId = user.id;
+        
+        // Save session before responding
+        req.session.save((err) => {
+          if (err) {
+            return res.status(500).json({ error: "Session save failed" });
+          }
+          
+          const { password: _, ...userWithoutPassword } = user;
+          res.json(userWithoutPassword);
+        });
+      });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

@@ -17,8 +17,15 @@ setupSecurityMiddleware(app);
 
 const MemoryStoreSession = MemoryStore(session);
 
+// Require SESSION_SECRET in production, use a generated one in development
+const sessionSecret = process.env.SESSION_SECRET || (
+  process.env.NODE_ENV === 'production'
+    ? (() => { throw new Error('SESSION_SECRET environment variable is required in production'); })()
+    : `dev-secret-${Math.random().toString(36).substring(2)}`
+);
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'dapsigames-secret-key-change-in-production',
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   store: new MemoryStoreSession({
