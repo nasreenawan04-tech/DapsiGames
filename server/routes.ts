@@ -760,17 +760,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if user is already a member
-      const [existing] = await db
+      const [existing] = await requireDb()
         .select()
         .from(groupMembers)
         .where(sql`${groupMembers.groupId} = ${groupId} AND ${groupMembers.userId} = ${userId}`)
         .limit(1);
 
-      if (existing.length > 0) {
+      if (existing) {
         return res.status(400).json({ error: "Already a member of this group" });
       }
 
-      const [membership] = await db
+      const [membership] = await requireDb()
         .insert(groupMembers)
         .values({
           groupId,
@@ -843,7 +843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { groupId } = req.params;
 
-      const leaderboard = await db
+      const leaderboard = await requireDb()
         .select({
           userId: users.id,
           fullName: users.fullName,
@@ -872,7 +872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { groupId } = req.params;
       const limit = parseInt(req.query.limit as string) || 20;
 
-      const activities = await db
+      const activities = await requireDb()
         .select({
           activityId: userActivities.id,
           userId: users.id,
@@ -905,7 +905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         groupId,
       });
 
-      const [challenge] = await db
+      const [challenge] = await requireDb()
         .insert(groupChallenges)
         .values(validatedData)
         .returning();
@@ -921,7 +921,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { groupId } = req.params;
 
-      const challenges = await db
+      const challenges = await requireDb()
         .select()
         .from(groupChallenges)
         .where(eq(groupChallenges.groupId, groupId))
@@ -944,7 +944,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify user is a member of the group
-      const [membership] = await db
+      const [membership] = await requireDb()
         .select()
         .from(groupMembers)
         .where(sql`${groupMembers.groupId} = ${groupId} AND ${groupMembers.userId} = ${userId}`)
@@ -960,7 +960,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: message.trim(),
       });
 
-      const [newMessage] = await db
+      const [newMessage] = await requireDb()
         .insert(groupMessages)
         .values(validatedData)
         .returning();
@@ -978,7 +978,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
 
-      const messages = await db
+      const messages = await requireDb()
         .select({
           id: groupMessages.id,
           groupId: groupMessages.groupId,
@@ -1241,7 +1241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all achievement definitions (cached for 5 minutes)
   app.get("/api/achievements/definitions", cacheMiddleware(), async (req, res) => {
     try {
-      const definitions = await db
+      const definitions = await requireDb()
         .select()
         .from(achievementDefinitions);
 
@@ -1254,7 +1254,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's earned achievements
   app.get("/api/achievements/:userId", async (req, res) => {
     try {
-      const earned = await db
+      const earned = await requireDb()
         .select({
           id: userAchievements.id,
           userId: userAchievements.userId,
@@ -1283,7 +1283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertUserAchievementSchema.parse(req.body);
 
       // Check if achievement already unlocked
-      const existing = await db
+      const existing = await requireDb()
         .select()
         .from(userAchievements)
         .where(
@@ -1295,7 +1295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Achievement already unlocked" });
       }
 
-      const [achievement] = await db
+      const [achievement] = await requireDb()
         .insert(userAchievements)
         .values(validatedData)
         .returning();
@@ -1311,7 +1311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user bookmarks
   app.get("/api/bookmarks/:userId", async (req, res) => {
     try {
-      const userBookmarks = await db
+      const userBookmarks = await requireDb()
         .select()
         .from(bookmarks)
         .where(eq(bookmarks.userId, req.params.userId));
@@ -1327,7 +1327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertBookmarkSchema.parse(req.body);
 
-      const [bookmark] = await db
+      const [bookmark] = await requireDb()
         .insert(bookmarks)
         .values(validatedData)
         .returning();
@@ -1341,8 +1341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete bookmark
   app.delete("/api/bookmarks/:userId/:materialId", async (req, res) => {
     try {
-      await db
-        .delete(bookmarks)
+      await requireDb()        .delete(bookmarks)
         .where(
           sql`${bookmarks.userId} = ${req.params.userId} AND ${bookmarks.studyMaterialId} = ${req.params.materialId}`
         );
@@ -1358,7 +1357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all activities (for leaderboard time filtering)
   app.get("/api/activities/all", async (req, res) => {
     try {
-      const activities = await db
+      const activities = await requireDb()
         .select({
           id: userActivities.id,
           userId: userActivities.userId,
@@ -1383,7 +1382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user activities
   app.get("/api/activities/:userId", async (req, res) => {
     try {
-      const activities = await db
+      const activities = await requireDb()
         .select()
         .from(userActivities)
         .where(eq(userActivities.userId, req.params.userId))
@@ -1405,7 +1404,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let progress;
       if (itemType) {
-        progress = await db
+        progress = await requireDb()
           .select()
           .from(userProgress)
           .where(
@@ -1413,7 +1412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
           .orderBy(desc(userProgress.lastAccessedAt));
       } else {
-        progress = await db
+        progress = await requireDb()
           .select()
           .from(userProgress)
           .where(eq(userProgress.userId, req.params.userId))
@@ -1435,7 +1434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "itemType query parameter required" });
       }
 
-      const [progress] = await db
+      const [progress] = await requireDb()
         .select()
         .from(userProgress)
         .where(
@@ -1459,7 +1458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const validatedData = insertUserProgressSchema.parse(req.body);
 
       // Check if progress already exists
-      const existing = await db
+      const existing = await requireDb()
         .select()
         .from(userProgress)
         .where(
@@ -1472,7 +1471,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const updateData = req.body;
         updateData.lastAccessedAt = new Date();
 
-        const [updated] = await db
+        const [updated] = await requireDb()
           .update(userProgress)
           .set(updateData)
           .where(eq(userProgress.id, existing[0].id))
@@ -1482,7 +1481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create new progress
-      const [progress] = await db
+      const [progress] = await requireDb()
         .insert(userProgress)
         .values(validatedData)
         .returning();
@@ -1583,7 +1582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get study sessions for a user
   app.get("/api/study-sessions/:userId", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!(req as any).isAuthenticated || !(req as any).isAuthenticated()) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1597,7 +1596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/study-sessions", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!(req as any).isAuthenticated || !(req as any).isAuthenticated()) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1665,7 +1664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get tasks for a user
   app.get("/api/tasks/:userId", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!(req as any).isAuthenticated || !(req as any).isAuthenticated()) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1713,7 +1712,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/tasks/:taskId", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!(req as any).isAuthenticated || !(req as any).isAuthenticated()) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1739,7 +1738,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/tasks/:taskId/complete", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!(req as any).isAuthenticated || !(req as any).isAuthenticated()) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1770,7 +1769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.delete("/api/tasks/:taskId", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!(req as any).isAuthenticated || !(req as any).isAuthenticated()) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1792,7 +1791,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).json({ error: "Database not available" });
       }
 
-      const [userStreak] = await db
+      const [userStreak] = await requireDb()
         .select()
         .from(streaks)
         .where(eq(streaks.userId, req.params.userId))
@@ -1801,7 +1800,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userStreak) {
         // Create a new streak for the user
         try {
-          const [newStreak] = await db
+          const [newStreak] = await requireDb()
             .insert(streaks)
             .values({ 
               userId: req.params.userId,
@@ -1813,7 +1812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.json(newStreak);
         } catch (insertError: any) {
           // If insert fails, try to select again (race condition)
-          const [existingStreak] = await db
+          const [existingStreak] = await requireDb()
             .select()
             .from(streaks)
             .where(eq(streaks.userId, req.params.userId))
@@ -1839,7 +1838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all badges
   app.get("/api/badges", cacheMiddleware(), async (req, res) => {
     try {
-      const allBadges = await db
+      const allBadges = await requireDb()
         .select()
         .from(badges);
 
@@ -1852,7 +1851,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user badges
   app.get("/api/user-badges/:userId", async (req, res) => {
     try {
-      const earnedBadges = await db
+      const earnedBadges = await requireDb()
         .select({
           id: userBadges.id,
           badgeId: userBadges.badgeId,
@@ -2014,7 +2013,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user level info
   app.get("/api/users/:userId/level", async (req, res) => {
     try {
-      const [userLevel] = await db
+      const [userLevel] = await requireDb()
         .select()
         .from(userLevels)
         .where(eq(userLevels.userId, req.params.userId))
@@ -2069,7 +2068,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all levels
   app.get("/api/levels", async (req, res) => {
     try {
-      const levelList = await db
+      const levelList = await requireDb()
         .select()
         .from(levels)
         .orderBy(levels.levelNumber);
@@ -2085,7 +2084,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user coins
   app.get("/api/users/:userId/coins", async (req, res) => {
     try {
-      const [coins] = await db
+      const [coins] = await requireDb()
         .select()
         .from(userCoins)
         .where(eq(userCoins.userId, req.params.userId))
@@ -2093,7 +2092,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!coins) {
         // Create default coins record
-        const [newCoins] = await db
+        const [newCoins] = await requireDb()
           .insert(userCoins)
           .values({ userId: req.params.userId })
           .returning();
@@ -2129,7 +2128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user streak
   app.get("/api/users/:userId/streak", async (req, res) => {
     try {
-      const [streak] = await db
+      const [streak] = await requireDb()
         .select()
         .from(streaks)
         .where(eq(streaks.userId, req.params.userId))
@@ -2137,7 +2136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!streak) {
         // Create default streak record
-        const [newStreak] = await db
+        const [newStreak] = await requireDb()
           .insert(streaks)
           .values({ userId: req.params.userId })
           .returning();
@@ -2177,7 +2176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user badges
   app.get("/api/users/:userId/badges", async (req, res) => {
     try {
-      const userBadgesList = await db
+      const userBadgesList = await requireDb()
         .select({
           id: userBadges.id,
           earnedAt: userBadges.earnedAt,
@@ -2198,7 +2197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user friends
   app.get("/api/users/:userId/friends", async (req, res) => {
     try {
-      const friendsList = await db
+      const friendsList = await requireDb()
         .select({ friendId: friendships.friendId })
         .from(friendships)
         .where(eq(friendships.userId, req.params.userId));
@@ -2236,7 +2235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if friendship already exists
-      const [existing] = await db
+      const [existing] = await requireDb()
         .select()
         .from(friendships)
         .where(
@@ -2249,7 +2248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create friend request
-      const [friendship] = await db
+      const [friendship] = await requireDb()
         .insert(friendships)
         .values({
           userId: req.params.userId,
@@ -2273,7 +2272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid status" });
       }
 
-      const [updated] = await db
+      const [updated] = await requireDb()
         .update(friendships)
         .set({ status, updatedAt: new Date() })
         .where(eq(friendships.id, req.params.friendshipId))
@@ -2313,7 +2312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/users/:userId/friends/leaderboard", async (req, res) => {
     try {
       // Get accepted friends
-      const friendsList = await db
+      const friendsList = await requireDb()
         .select({ friendId: friendships.friendId })
         .from(friendships)
         .where(
@@ -2327,7 +2326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json([]);
       }
 
-      const leaderboard = await db
+      const leaderboard = await requireDb()
         .select({
           userId: userStats.userId,
           totalPoints: userStats.totalPoints,
@@ -2382,7 +2381,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get shop item
-      const [item] = await db
+      const [item] = await requireDb()
         .select()
         .from(shopItems)
         .where(eq(shopItems.id, shopItemId))
@@ -2393,7 +2392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if already owned
-      const [existing] = await db
+      const [existing] = await requireDb()
         .select()
         .from(userInventory)
         .where(
@@ -2413,7 +2412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Add to inventory
-      const [inventoryItem] = await db
+      const [inventoryItem] = await requireDb()
         .insert(userInventory)
         .values({
           userId: req.params.userId,
@@ -2433,7 +2432,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user inventory
   app.get("/api/users/:userId/inventory", async (req, res) => {
     try {
-      const inventory = await db
+      const inventory = await requireDb()
         .select({
           id: userInventory.id,
           isEquipped: userInventory.isEquipped,
@@ -2461,7 +2460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // If equipping, unequip other items of the same category
       if (isEquipped) {
-        const [item] = await db
+        const [item] = await requireDb()
           .select({
             category: shopItems.category,
           })
@@ -2472,8 +2471,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (item) {
           // Unequip all items of same category
-          await db
-            .update(userInventory)
+          await requireDb()            .update(userInventory)
             .set({ isEquipped: false })
             .where(
               sql`${userInventory.userId} = ${req.params.userId} AND ${userInventory.shopItemId} IN (SELECT id FROM ${shopItems} WHERE ${shopItems.category} = ${item.category})`
@@ -2482,7 +2480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Update the item
-      const [updated] = await db
+      const [updated] = await requireDb()
         .update(userInventory)
         .set({ isEquipped })
         .where(eq(userInventory.id, req.params.itemId))
@@ -2503,7 +2501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get group leaderboard
   app.get("/api/groups/:groupId/leaderboard", async (req, res) => {
     try {
-      const membersList = await db
+      const membersList = await requireDb()
         .select({ userId: groupMembers.userId })
         .from(groupMembers)
         .where(eq(groupMembers.groupId, req.params.groupId));
@@ -2514,7 +2512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json([]);
       }
 
-      const leaderboard = await db
+      const leaderboard = await requireDb()
         .select({
           userId: userStats.userId,
           totalPoints: userStats.totalPoints,
@@ -2540,7 +2538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get group challenge progress
   app.get("/api/groups/:groupId/challenges/:challengeId/progress", async (req, res) => {
     try {
-      const [challenge] = await db
+      const [challenge] = await requireDb()
         .select()
         .from(groupChallenges)
         .where(eq(groupChallenges.id, req.params.challengeId))
@@ -2551,7 +2549,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get all members
-      const membersList = await db
+      const membersList = await requireDb()
         .select({ userId: groupMembers.userId })
         .from(groupMembers)
         .where(eq(groupMembers.groupId, req.params.groupId));
@@ -2562,7 +2560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let progress: any[] = [];
 
       if (challenge.challengeType === "points") {
-        progress = await db
+        progress = await requireDb()
           .select({
             userId: users.id,
             fullName: users.fullName,
@@ -2574,7 +2572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(inArray(users.id, memberIds))
           .orderBy(desc(userStats.totalPoints));
       } else if (challenge.challengeType === "study_sessions") {
-        progress = await db
+        progress = await requireDb()
           .select({
             userId: users.id,
             fullName: users.fullName,
@@ -2586,7 +2584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(inArray(users.id, memberIds))
           .orderBy(desc(userStats.studySessions));
       } else if (challenge.challengeType === "games_completed") {
-        progress = await db
+        progress = await requireDb()
           .select({
             userId: users.id,
             fullName: users.fullName,
@@ -2654,7 +2652,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get authenticated user from request
       const userId = req.userId!;
 
-      const [user] = await db
+      const [user] = await requireDb()
         .select()
         .from(users)
         .where(eq(users.id, userId))
@@ -2695,8 +2693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         customerId = customer.id;
 
-        await db
-          .update(users)
+        await requireDb()          .update(users)
           .set({ stripeCustomerId: customerId })
           .where(eq(users.id, user.id));
       }
@@ -2717,8 +2714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Update user with subscription info
-      await db
-        .update(users)
+      await requireDb()        .update(users)
         .set({ 
           stripeSubscriptionId: subscription.id,
           subscriptionStatus: subscription.status,
@@ -2768,8 +2764,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         case 'customer.subscription.updated':
         case 'customer.subscription.deleted':
           const subscription = event.data.object as any;
-          await db
-            .update(users)
+          await requireDb()            .update(users)
             .set({
               subscriptionStatus: subscription.status,
               isPro: subscription.status === 'active',
