@@ -68,7 +68,7 @@ import {
   broadcastPointsEarned,
 } from "./services/gamification";
 import { eq, desc, sql, inArray, and } from "drizzle-orm";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { setupWebSocket, broadcastLeaderboardUpdate, wss } from "./websocket";
 import { healthCheck } from "./middleware/health";
 import { cacheMiddleware } from "./middleware/cache";
