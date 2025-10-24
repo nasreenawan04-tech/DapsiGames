@@ -83,11 +83,7 @@ export default function Planner() {
   // Complete task mutation
   const completeTaskMutation = useMutation({
     mutationFn: async (taskId: string) => {
-      const response = await fetch(`/api/tasks/${taskId}/complete`, {
-        method: "POST",
-      });
-      if (!response.ok) throw new Error("Failed to complete task");
-      return response.json();
+      return await apiRequest("PATCH", `/api/tasks/${taskId}/complete`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", user?.id] });
