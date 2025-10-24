@@ -34,7 +34,87 @@ export default function Dashboard() {
   });
   
   if (!user) {
-    return null;
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <Card className="mb-8 bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10 border-none">
+            <CardContent className="p-8 text-center">
+              <h1 className="text-3xl font-bold mb-3" data-testid="text-guest-welcome">
+                Welcome to DapsiGames! 🎮
+              </h1>
+              <p className="text-lg text-muted-foreground mb-6 max-w-2xl mx-auto">
+                You're browsing as a guest. Create a free account to track your progress, earn points, and compete on the leaderboard!
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link href="/signup">
+                  <Button size="lg" data-testid="button-signup-guest">
+                    Create Free Account
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button size="lg" variant="outline" data-testid="button-login-guest">
+                    Login
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="hover-elevate transition-all duration-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Gamepad2 className="h-5 w-5 text-primary" />
+                  Play Games
+                </CardTitle>
+                <CardDescription>Try our educational games</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href="/games">
+                  <Button className="w-full" data-testid="button-games">
+                    Browse Games
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate transition-all duration-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-secondary" />
+                  Study Materials
+                </CardTitle>
+                <CardDescription>Access learning resources</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href="/study">
+                  <Button className="w-full" data-testid="button-study">
+                    Start Learning
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card className="hover-elevate transition-all duration-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-accent" />
+                  Leaderboard
+                </CardTitle>
+                <CardDescription>See top performers</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href="/leaderboard">
+                  <Button className="w-full" data-testid="button-leaderboard">
+                    View Rankings
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const userRank = leaderboard.findIndex(u => u.id === user.id) + 1;

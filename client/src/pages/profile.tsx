@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { User, Award, Trophy, TrendingUp, Calendar, Settings, Camera, Users, UserPlus, Check, X, Search, Flame, Target } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,35 @@ export default function Profile() {
   );
 
   if (!user) {
-    return null;
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-2xl mx-auto bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10 border-none">
+            <CardContent className="p-8 text-center">
+              <User className="h-16 w-16 mx-auto mb-4 text-primary" />
+              <h1 className="text-3xl font-bold mb-3" data-testid="text-profile-guest">
+                Create Your Profile
+              </h1>
+              <p className="text-lg text-muted-foreground mb-6 max-w-xl mx-auto">
+                Sign up to create your personal profile, track your achievements, connect with friends, and see your progress over time!
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link href="/signup">
+                  <Button size="lg" data-testid="button-signup-profile">
+                    Create Free Account
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button size="lg" variant="outline" data-testid="button-login-profile">
+                    Login
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   const handleEditProfile = () => {

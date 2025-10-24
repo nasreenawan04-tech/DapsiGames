@@ -3,6 +3,8 @@ import { loadStripe } from '@stripe/stripe-js';
 import { useEffect, useState } from 'react';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, Sparkles } from "lucide-react";
@@ -65,11 +67,17 @@ const SubscribeForm = () => {
 };
 
 export default function Subscribe() {
+  const { user } = useAuth();
   const [clientSecret, setClientSecret] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
     apiRequest("POST", "/api/get-or-create-subscription")
       .then((data) => {
         if (data.clientSecret) {
@@ -85,7 +93,61 @@ export default function Subscribe() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, []);
+  }, [user]);
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background p-4">
+        <div className="max-w-4xl mx-auto py-8">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold mb-2" data-testid="text-subscribe-title">
+              Upgrade to Pro
+            </h1>
+            <p className="text-muted-foreground" data-testid="text-subscribe-subtitle">
+              Unlock premium features and take your learning to the next level
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-accent" />
+                  Pro Features
+                </CardTitle>
+                <CardDescription>Everything you get with Pro membership</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ProFeaturesList />
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10 border-none">
+              <CardContent className="p-8 text-center flex flex-col justify-center h-full">
+                <Sparkles className="h-12 w-12 mx-auto mb-4 text-primary" />
+                <h2 className="text-2xl font-bold mb-3">Create an Account to Subscribe</h2>
+                <p className="text-muted-foreground mb-6">
+                  Sign up for a free account to access Pro membership and unlock all premium features.
+                </p>
+                <div className="flex flex-col gap-3">
+                  <Link href="/signup">
+                    <Button size="lg" className="w-full" data-testid="button-signup-subscribe">
+                      Create Free Account
+                    </Button>
+                  </Link>
+                  <Link href="/login">
+                    <Button size="lg" variant="outline" className="w-full" data-testid="button-login-subscribe">
+                      Login to Subscribe
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

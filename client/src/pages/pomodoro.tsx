@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Timer, Play, Pause, RotateCcw, Trophy, Flame, Clock, Music, Volume2, VolumeX } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,11 +38,37 @@ export default function Pomodoro() {
   const [isRunning, setIsRunning] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!user) {
-      navigate("/login");
-    }
-  }, [user, navigate]);
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-2xl mx-auto bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10 border-none">
+            <CardContent className="p-8 text-center">
+              <Timer className="h-16 w-16 mx-auto mb-4 text-primary" />
+              <h1 className="text-3xl font-bold mb-3" data-testid="text-pomodoro-guest">
+                Pomodoro Focus Timer
+              </h1>
+              <p className="text-lg text-muted-foreground mb-6 max-w-xl mx-auto">
+                Create an account to use the Pomodoro timer, track your study sessions, earn XP, and maintain your streak!
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link href="/signup">
+                  <Button size="lg" data-testid="button-signup-pomodoro">
+                    Create Free Account
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button size="lg" variant="outline" data-testid="button-login-pomodoro">
+                    Login
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   // Fetch user's streak
   const { data: streak } = useQuery<Streak>({

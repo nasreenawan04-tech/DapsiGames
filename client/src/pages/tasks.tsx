@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Plus, CheckCircle2, Circle, Trash2, Calendar, Flag, Filter, Search, Edit } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,8 +41,35 @@ export default function Tasks() {
   const [deadline, setDeadline] = useState("");
 
   if (!user) {
-    navigate("/login");
-    return null;
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-2xl mx-auto bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10 border-none">
+            <CardContent className="p-8 text-center">
+              <CheckCircle2 className="h-16 w-16 mx-auto mb-4 text-primary" />
+              <h1 className="text-3xl font-bold mb-3" data-testid="text-tasks-guest">
+                Task Manager
+              </h1>
+              <p className="text-lg text-muted-foreground mb-6 max-w-xl mx-auto">
+                Create an account to manage your tasks, set deadlines, track progress, and earn XP for completing your goals!
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link href="/signup">
+                  <Button size="lg" data-testid="button-signup-tasks">
+                    Create Free Account
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button size="lg" variant="outline" data-testid="button-login-tasks">
+                    Login
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
   }
 
   // Fetch tasks

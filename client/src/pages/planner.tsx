@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -200,6 +201,38 @@ export default function Planner() {
     reading: Calendar,
     practice: CheckCircle2,
   };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-2xl mx-auto bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10 border-none">
+            <CardContent className="p-8 text-center">
+              <Calendar className="h-16 w-16 mx-auto mb-4 text-primary" />
+              <h1 className="text-3xl font-bold mb-3" data-testid="text-planner-guest">
+                Study Planner
+              </h1>
+              <p className="text-lg text-muted-foreground mb-6 max-w-xl mx-auto">
+                Create an account to plan your study sessions, organize tasks in a calendar view, and stay on track with your goals!
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link href="/signup">
+                  <Button size="lg" data-testid="button-signup-planner">
+                    Create Free Account
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button size="lg" variant="outline" data-testid="button-login-planner">
+                    Login
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

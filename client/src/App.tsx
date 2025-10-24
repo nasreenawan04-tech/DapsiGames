@@ -78,9 +78,7 @@ function Router() {
             <Route path="/games" component={LazyGames} />
             <Route path="/games/:gameId" component={LazyGamePlay} />
             <Route path="/groups" component={LazyGroups} />
-            <Route path="/subscribe">
-              {() => <ProtectedRoute><Subscribe /></ProtectedRoute>}
-            </Route>
+            <Route path="/subscribe" component={Subscribe} />
             <Route path="/guest" component={LazyGuest} />
             <Route path="/about" component={About} />
             <Route path="/contact" component={Contact} />
