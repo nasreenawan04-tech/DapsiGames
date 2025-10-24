@@ -132,7 +132,8 @@ export interface IStorage {
   // Streak methods
   getUserStreak(userId: string): Promise<Streak | undefined>;
   createStreak(streak: InsertStreak): Promise<Streak>;
-  updateStreak(userId: string, updates: Partial<Streak>): Promise<Streak>;
+  updateStreak(userId: string): Promise<void>;
+  updateStreakData(userId: string, updates: Partial<Streak>): Promise<Streak>;
 
   // Pomodoro Timer methods (assuming these would be added to IStorage)
   getStudySessionByUserIdAndStatus(userId: string, completed: boolean): Promise<StudySession | undefined>;
@@ -902,7 +903,7 @@ export class MemStorage implements IStorage {
     return streak;
   }
 
-  async updateStreak(userId: string, updates: Partial<Streak>): Promise<Streak> {
+  async updateStreakData(userId: string, updates: Partial<Streak>): Promise<Streak> {
     const streak = await this.getUserStreak(userId);
     if (!streak) throw new Error("Streak not found");
 
