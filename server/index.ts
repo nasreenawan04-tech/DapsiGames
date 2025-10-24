@@ -1,6 +1,6 @@
-import express, { type Request, Response, NextFunction } from "express";
-import session from "express-session";
-import MemoryStore from "memorystore";
+import express, { type Request, type Response, type NextFunction } from "express";
+import * as expressSession from "express-session";
+import * as memorystore from "memorystore";
 import { storage } from "./storage";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic } from "./vite";
@@ -16,6 +16,8 @@ app.set('trust proxy', 1);
 
 setupSecurityMiddleware(app);
 
+const MemoryStore = memorystore.default;
+const session = expressSession.default;
 const MemoryStoreSession = MemoryStore(session);
 
 // Require SESSION_SECRET in production, use a generated one in development
@@ -54,19 +56,19 @@ declare module 'express-session' {
   }
 }
 app.use(express.json({
-  verify: (req, _res, buf) => {
+  verify: (req: Request, _res: Response, buf: Buffer) => {
     req.rawBody = buf;
   }
 }));
 app.use(express.urlencoded({ extended: false }));
 
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
+  res.json = function (bodyJson: any, ...args: any[]) {
     capturedJsonResponse = bodyJson;
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
