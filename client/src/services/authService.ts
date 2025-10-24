@@ -1,10 +1,9 @@
-import { supabase } from '@/lib/supabase';
-
 export interface AuthUser {
   id: string;
   email: string;
   fullName: string;
   avatarUrl?: string;
+  points?: number;
 }
 
 export interface SignupData {
@@ -23,221 +22,186 @@ export interface LoginResponse {
   email: string;
   fullName: string;
   avatarUrl?: string;
+  points?: number;
 }
 
+const API_BASE = '/api';
+
 /**
- * Sign up a new user with email and password using Supabase
+ * Sign up a new user with email and password using backend API
  */
 export async function signUp(data: SignupData) {
-  const { data: authData, error } = await supabase.auth.signUp({
-    email: data.email,
-    password: data.password,
-    options: {
-      data: {
-        full_name: data.fullName,
-      },
+  const response = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify(data),
+    credentials: 'include',
   });
 
-  if (error) {
-    throw new Error(error.message);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to create account');
   }
 
-  if (!authData.user) {
-    throw new Error('Failed to create user account');
-  }
-
-  // Check if email confirmation is required
-  const needsEmailVerification = authData.user.identities?.length === 0;
+  const userData = await response.json();
 
   const user: AuthUser = {
-    id: authData.user.id,
-    email: authData.user.email!,
-    fullName: data.fullName,
-    avatarUrl: authData.user.user_metadata?.avatar_url,
+    id: userData.id,
+    email: userData.email,
+    fullName: userData.fullName,
+    avatarUrl: userData.avatarUrl,
+    points: userData.points || 0,
   };
 
   return {
     user,
-    session: authData.session,
-    needsEmailVerification,
+    needsEmailVerification: false,
   };
 }
 
 /**
- * Sign in with email and password using Supabase
+ * Sign in with email and password using backend API
  */
 export async function signIn(data: LoginData) {
-  const { data: authData, error } = await supabase.auth.signInWithPassword({
-    email: data.email,
-    password: data.password,
+  const response = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+    credentials: 'include',
   });
 
-  if (error) {
-    throw new Error(error.message);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to sign in');
   }
 
-  if (!authData.user) {
-    throw new Error('Failed to sign in');
-  }
+  const userData = await response.json();
 
   const user: AuthUser = {
-    id: authData.user.id,
-    email: authData.user.email!,
-    fullName: authData.user.user_metadata?.full_name || authData.user.email!.split('@')[0],
-    avatarUrl: authData.user.user_metadata?.avatar_url,
+    id: userData.id,
+    email: userData.email,
+    fullName: userData.fullName,
+    avatarUrl: userData.avatarUrl,
+    points: userData.points || 0,
   };
 
   return {
     user,
-    session: authData.session,
   };
 }
 
 /**
- * Sign out the current user using Supabase
+ * Sign out the current user
  */
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-/**
- * Send password reset email using Supabase
- */
-export async function resetPassword(email: string) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/reset-password`,
+  const response = await fetch(`${API_BASE}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
   });
 
-  if (error) {
-    throw new Error(error.message);
+  if (!response.ok) {
+    throw new Error('Failed to sign out');
   }
 }
 
 /**
- * Update user password using Supabase (after reset)
- */
-export async function updatePassword(newPassword: string) {
-  const { error } = await supabase.auth.updateUser({
-    password: newPassword,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-/**
- * Resend verification email using Supabase
- */
-export async function resendVerificationEmail(email: string) {
-  const { error } = await supabase.auth.resend({
-    type: 'signup',
-    email,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-/**
- * Get current session from Supabase
- */
-export async function getSession() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session;
-}
-
-/**
- * Get current user from Supabase
+ * Get current authenticated user
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
+  try {
+    const response = await fetch(`${API_BASE}/auth/me`, {
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const userData = await response.json();
+
+    return {
+      id: userData.id,
+      email: userData.email,
+      fullName: userData.fullName,
+      avatarUrl: userData.avatarUrl,
+      points: userData.points || 0,
+    };
+  } catch (error) {
+    console.error('Error fetching current user:', error);
     return null;
   }
-
-  return {
-    id: user.id,
-    email: user.email!,
-    fullName: user.user_metadata?.full_name || user.email!.split('@')[0],
-    avatarUrl: user.user_metadata?.avatar_url,
-  };
 }
 
 /**
- * Sign in with Google OAuth using Supabase
+ * Send password reset email
  */
-export async function signInWithGoogle() {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: `${window.location.origin}/auth-callback`,
+export async function resetPassword(email: string) {
+  const response = await fetch(`${API_BASE}/auth/reset-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ email }),
   });
 
-  if (error) {
-    throw new Error(error.message);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to send reset email');
   }
 }
 
 /**
- * Upload profile picture using Supabase Storage
+ * Update user password
+ */
+export async function updatePassword(newPassword: string, token?: string) {
+  const response = await fetch(`${API_BASE}/auth/update-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password: newPassword, token }),
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to update password');
+  }
+}
+
+/**
+ * Upload profile picture
  */
 export async function uploadProfilePicture(file: File, userId: string) {
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${userId}-${Date.now()}.${fileExt}`;
-  const filePath = `avatars/${fileName}`;
+  const formData = new FormData();
+  formData.append('avatar', file);
 
-  const { error: uploadError } = await supabase.storage
-    .from('avatars')
-    .upload(filePath, file);
-
-  if (uploadError) {
-    throw new Error(uploadError.message);
-  }
-
-  const { data: { publicUrl } } = supabase.storage
-    .from('avatars')
-    .getPublicUrl(filePath);
-
-  // Update user metadata with new avatar URL
-  const { error: updateError } = await supabase.auth.updateUser({
-    data: { avatar_url: publicUrl },
+  const response = await fetch(`${API_BASE}/user/${userId}/avatar`, {
+    method: 'POST',
+    body: formData,
+    credentials: 'include',
   });
 
-  if (updateError) {
-    throw new Error(updateError.message);
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to upload avatar');
   }
 
-  return publicUrl;
+  const data = await response.json();
+  return data.avatarUrl;
 }
 
 /**
- * Listen to auth state changes using Supabase
+ * Auth state change callback type
  */
 export function onAuthStateChange(callback: (user: AuthUser | null) => void) {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(
-    async (event, session) => {
-      if (session?.user) {
-        const user: AuthUser = {
-          id: session.user.id,
-          email: session.user.email!,
-          fullName: session.user.user_metadata?.full_name || session.user.email!.split('@')[0],
-          avatarUrl: session.user.user_metadata?.avatar_url,
-        };
-        callback(user);
-      } else {
-        callback(null);
-      }
-    }
-  );
-
-  return subscription;
+  // For backend API, we can poll or use websockets
+  // For now, return a no-op subscription since the auth state is managed in the AuthContext
+  return {
+    unsubscribe: () => {},
+  };
 }
