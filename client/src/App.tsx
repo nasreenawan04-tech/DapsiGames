@@ -6,7 +6,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -68,35 +67,17 @@ function Router() {
             <Route path="/forgot-password" component={ForgotPassword} />
             <Route path="/auth/callback" component={AuthCallback} />
             <Route path="/auth/reset-password" component={ResetPassword} />
-            <Route path="/dashboard">
-              {() => <ProtectedRoute><LazyDashboard /></ProtectedRoute>}
-            </Route>
-            <Route path="/pomodoro">
-              {() => <ProtectedRoute><LazyPomodoro /></ProtectedRoute>}
-            </Route>
-            <Route path="/tasks">
-              {() => <ProtectedRoute><LazyTasks /></ProtectedRoute>}
-            </Route>
-            <Route path="/planner">
-              {() => <ProtectedRoute><LazyPlanner /></ProtectedRoute>}
-            </Route>
+            <Route path="/dashboard" component={LazyDashboard} />
+            <Route path="/pomodoro" component={LazyPomodoro} />
+            <Route path="/tasks" component={LazyTasks} />
+            <Route path="/planner" component={LazyPlanner} />
             <Route path="/leaderboard" component={Leaderboard} />
-            <Route path="/profile">
-              {() => <ProtectedRoute><LazyProfile /></ProtectedRoute>}
-            </Route>
-            <Route path="/study">
-              {() => <ProtectedRoute><LazyStudy /></ProtectedRoute>}
-            </Route>
+            <Route path="/profile" component={LazyProfile} />
+            <Route path="/study" component={LazyStudy} />
             <Route path="/games" component={LazyGames} />
-            <Route path="/games/:gameId">
-              {() => <ProtectedRoute><LazyGamePlay /></ProtectedRoute>}
-            </Route>
-            <Route path="/groups">
-              {() => <ProtectedRoute><LazyGroups /></ProtectedRoute>}
-            </Route>
-            <Route path="/subscribe">
-              {() => <ProtectedRoute><Subscribe /></ProtectedRoute>}
-            </Route>
+            <Route path="/games/:gameId" component={LazyGamePlay} />
+            <Route path="/groups" component={LazyGroups} />
+            <Route path="/subscribe" component={Subscribe} />
             <Route path="/guest" component={LazyGuest} />
             <Route path="/about" component={About} />
             <Route path="/contact" component={Contact} />
