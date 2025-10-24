@@ -79,7 +79,12 @@ import { auth as firebaseAdminAuth } from "./lib/firebaseAdmin";
 
 const SALT_ROUNDS = 10;
 
-// Helper function to ensure database is available
+// Helper function to check if database is available (non-throwing)
+function hasDb() {
+  return db !== null;
+}
+
+// Helper function to ensure database is available (throws if not available)
 function requireDb() {
   if (!db) {
     throw new Error('Database not available. Please ensure DATABASE_URL is configured.');
@@ -119,18 +124,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: hashedPassword,
       });
 
-      // Initialize user stats and streak
-      if (requireDb()) {
+      // Initialize user stats and streak (only if database is available)
+      if (hasDb()) {
         try {
           // Check if stats already exist
-          const existingStats = await db
+          const existingStats = await db!
             .select()
             .from(userStats)
             .where(eq(userStats.userId, newUser.id))
             .limit(1);
 
           if (existingStats.length === 0) {
-            await requireDb().insert(userStats).values({
+            await db!.insert(userStats).values({
               userId: newUser.id,
               totalPoints: 0,
               currentRank: 0,
@@ -140,14 +145,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Check if streak already exists
-          const existingStreak = await db
+          const existingStreak = await db!
             .select()
             .from(streaks)
             .where(eq(streaks.userId, newUser.id))
             .limit(1);
 
           if (existingStreak.length === 0) {
-            await requireDb().insert(streaks).values({
+            await db!.insert(streaks).values({
               userId: newUser.id,
               currentStreak: 0,
               longestStreak: 0,
@@ -155,14 +160,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Initialize user coins
-          const existingCoins = await db
+          const existingCoins = await db!
             .select()
             .from(userCoins)
             .where(eq(userCoins.userId, newUser.id))
             .limit(1);
 
           if (existingCoins.length === 0) {
-            await requireDb().insert(userCoins).values({
+            await db!.insert(userCoins).values({
               userId: newUser.id,
               balance: 0,
               totalEarned: 0,
@@ -171,14 +176,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Initialize user level
-          const existingLevel = await db
+          const existingLevel = await db!
             .select()
             .from(userLevels)
             .where(eq(userLevels.userId, newUser.id))
             .limit(1);
 
           if (existingLevel.length === 0) {
-            await requireDb().insert(userLevels).values({
+            await db!.insert(userLevels).values({
               userId: newUser.id,
               currentLevel: 1,
               currentXp: 0,
@@ -416,7 +421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .limit(1);
 
           if (existingLevel.length === 0) {
-            await requireDb().insert(userLevels).values({
+            await db!.insert(userLevels).values({
               userId: newUser.id,
               currentLevel: 1,
               currentXp: 0,

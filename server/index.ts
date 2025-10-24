@@ -18,11 +18,13 @@ setupSecurityMiddleware(app);
 const MemoryStoreSession = MemoryStore(session);
 
 // Require SESSION_SECRET in production, use a generated one in development
-const sessionSecret = process.env.SESSION_SECRET || (
-  process.env.NODE_ENV === 'production'
-    ? (() => { throw new Error('SESSION_SECRET environment variable is required in production'); })()
-    : `dev-secret-${Math.random().toString(36).substring(2)}`
-);
+const sessionSecret = process.env.SESSION_SECRET || (() => {
+  if (process.env.NODE_ENV === 'production') {
+    console.warn('WARNING: SESSION_SECRET not set in production. Using a generated secret. This will cause session issues on serverless platforms.');
+    return `prod-fallback-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+  }
+  return `dev-secret-${Math.random().toString(36).substring(2)}`;
+})();
 
 app.use(session({
   secret: sessionSecret,
@@ -90,7 +92,7 @@ app.use((req, res, next) => {
 async function initializeDatabase() {
   try {
     if (!db) {
-      console.error("Database connection not available");
+      console.log("Database connection not available - using in-memory storage");
       return;
     }
     
@@ -109,35 +111,44 @@ async function initializeDatabase() {
 
     console.log("Existing tables:", result.rows.map((r: any) => r.table_name));
   } catch (error: any) {
-    console.error("Database initialization error:", error.message);
+    console.error("Database initialization error (non-fatal):", error.message);
+    // Don't throw - allow app to continue with in-memory storage
   }
 }
 
 async function setupApp() {
-  // Initialize database tables
-  await initializeDatabase();
+  try {
+    // Initialize database tables
+    await initializeDatabase();
 
-  // Register routes - will handle WebSocket setup internally if not on Vercel
-  const server = await registerRoutes(app);
+    // Register routes - will handle WebSocket setup internally if not on Vercel
+    const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
-  });
+      console.error('Error handler caught:', err);
+      
+      if (!res.headersSent) {
+        res.status(status).json({ message });
+      }
+    });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+    // importantly only setup vite in development and after
+    // setting up all the other routes so the catch-all route
+    // doesn't interfere with the other routes
+    if (app.get("env") === "development") {
+      await setupVite(app, server);
+    } else {
+      serveStatic(app);
+    }
+
+    return server;
+  } catch (error) {
+    console.error('Fatal error in setupApp:', error);
+    throw error;
   }
-
-  return server;
 }
 
 // For Vercel serverless deployment - initialize once and export the app
