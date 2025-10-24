@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -77,7 +78,9 @@ function Router() {
             <Route path="/games" component={LazyGames} />
             <Route path="/games/:gameId" component={LazyGamePlay} />
             <Route path="/groups" component={LazyGroups} />
-            <Route path="/subscribe" component={Subscribe} />
+            <Route path="/subscribe">
+              {() => <ProtectedRoute><Subscribe /></ProtectedRoute>}
+            </Route>
             <Route path="/guest" component={LazyGuest} />
             <Route path="/about" component={About} />
             <Route path="/contact" component={Contact} />
