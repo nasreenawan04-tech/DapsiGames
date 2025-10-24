@@ -1,16 +1,24 @@
 # Vercel Deployment Fix - FUNCTION_INVOCATION_FAILED Error
 
-## ✅ Problem Solved
+## ✅ Problems Solved
 
-The "This Serverless Function has crashed" error with code `FUNCTION_INVOCATION_FAILED` has been fixed!
+The "This Serverless Function has crashed" error with code `FUNCTION_INVOCATION_FAILED` and the "Unexpected token 'A'" JSON parsing errors have been fixed!
 
-## What Was the Problem?
+## What Were the Problems?
 
-The serverless function was crashing because:
+The serverless function was crashing because of **two critical issues**:
 
-1. **bcrypt Native Dependency** - Your app was using `bcrypt` which requires native C++ compilation. Vercel's serverless environment cannot compile native dependencies, causing the function to crash immediately.
+### Issue 1: bcrypt Native Dependency
+Your app was using `bcrypt` which requires native C++ compilation. Vercel's serverless environment cannot compile native dependencies, causing the function to crash immediately when trying to access login/signup pages.
 
-2. **Missing Environment Variables** - The app requires `SESSION_SECRET` in production, which must be set in Vercel's environment variables.
+### Issue 2: Passport.js Authentication Error  
+The code was calling `req.isAuthenticated()` which is a Passport.js method, but Passport was never initialized! This caused:
+- The server to crash with `TypeError: req.isAuthenticated is not a function`
+- "Unexpected token 'A'" errors in the frontend (because the server returned HTML error pages instead of JSON)
+- Complete failure of authentication after registration/login
+
+### Issue 3: Missing Environment Variables
+The app requires `SESSION_SECRET` in production, which must be set in Vercel's environment variables.
 
 ## What I Fixed
 
@@ -22,7 +30,15 @@ The serverless function was crashing because:
 
 This change has **zero impact** on functionality - bcryptjs provides the exact same password hashing security as bcrypt, but works on serverless platforms.
 
-### 2. Package Changes Made
+### 2. Fixed Authentication System ✅
+
+- **Removed all `req.isAuthenticated()` calls** - This Passport.js method was being used without Passport being initialized
+- **Replaced with `req.session.userId` checks** - Uses the existing Express session-based authentication
+- **Fixed 6 authentication endpoints** that were crashing the server
+
+This aligns the authentication system to use session-based auth consistently throughout the application.
+
+### 3. Package Changes Made
 
 ```bash
 # Removed
@@ -190,7 +206,22 @@ After deployment, verify:
 
 ## Summary
 
-Your app is now **fully compatible with Vercel deployment**! The main blocker (bcrypt native dependency) has been removed. Just set your environment variables in Vercel and you're ready to deploy! 🚀
+Your app is now **fully compatible with Vercel deployment**! Both critical blockers have been fixed:
+
+✅ **bcrypt native dependency** - Replaced with bcryptjs  
+✅ **Authentication crashes** - Fixed all `req.isAuthenticated()` errors  
+✅ **JSON parsing errors** - Server now returns proper JSON responses
+
+Just set your environment variables in Vercel and you're ready to deploy! 🚀
+
+### What Was Fixed
+
+| Issue | Before | After |
+|-------|--------|-------|
+| Login/Signup pages | Crashed with 500 error | ✅ Load successfully |
+| Authentication | "Unexpected token 'A'" error | ✅ Works correctly |
+| Password hashing | Failed on serverless | ✅ Works on serverless |
+| API responses | Returned HTML error pages | ✅ Returns proper JSON |
 
 ## Need Help?
 

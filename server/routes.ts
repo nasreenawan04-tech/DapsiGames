@@ -1646,7 +1646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get study sessions for a user
   app.get("/api/study-sessions/:userId", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!req.session.userId) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1660,7 +1660,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/study-sessions", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!req.session.userId) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1740,7 +1740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get tasks for a user
   app.get("/api/tasks/:userId", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!req.session.userId) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1788,7 +1788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/tasks/:taskId", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!req.session.userId) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1814,7 +1814,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/tasks/:taskId/complete", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!req.session.userId) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
@@ -1845,7 +1845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.delete("/api/tasks/:taskId", async (req, res) => {
-    if (!req.isAuthenticated()) {
+    if (!req.session.userId) {
       return res.status(401).send({ error: "Unauthorized" });
     }
 
