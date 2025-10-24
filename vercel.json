@@ -25,7 +25,7 @@
       }
     },
     {
-      "src": "/service-worker.*\\.js",
+      "src": "/(service-worker.*\\.js)",
       "dest": "/$1",
       "headers": {
         "Cache-Control": "no-cache"
