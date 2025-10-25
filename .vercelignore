@@ -7,3 +7,16 @@ node_modules
 *.log
 .cache
 coverage
+replit.nix
+.config
+.npm
+.vite
+tests
+__tests__
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+.prettierrc
+.eslintrc
+attached_assets

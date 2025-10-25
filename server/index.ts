@@ -121,20 +121,43 @@ async function initializeDatabase() {
 
 async function setupApp() {
   try {
+    console.log('[setupApp] Starting application setup...');
+    console.log('[setupApp] Environment:', process.env.NODE_ENV);
+    console.log('[setupApp] Running on Vercel:', process.env.VERCEL ? 'YES' : 'NO');
+    
     // Initialize database tables
-    await initializeDatabase();
+    try {
+      await initializeDatabase();
+      console.log('[setupApp] Database initialization completed');
+    } catch (dbError: any) {
+      console.error('[setupApp] Database initialization failed (continuing):', dbError.message);
+      // Continue - app can work with in-memory storage
+    }
 
     // Register routes - will handle WebSocket setup internally if not on Vercel
-    const server = await registerRoutes(app);
+    let server;
+    try {
+      server = await registerRoutes(app);
+      console.log('[setupApp] Routes registered successfully');
+    } catch (routeError: any) {
+      console.error('[setupApp] FATAL: Failed to register routes:', routeError);
+      throw new Error(`Route registration failed: ${routeError.message}`);
+    }
 
+    // Error handler middleware - must be registered after routes
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
 
-      console.error('Error handler caught:', err);
+      console.error('[Error Handler] Status:', status);
+      console.error('[Error Handler] Message:', message);
+      console.error('[Error Handler] Stack:', err.stack);
       
       if (!res.headersSent) {
-        res.status(status).json({ message });
+        res.status(status).json({ 
+          message,
+          error: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        });
       }
     });
 
@@ -142,14 +165,18 @@ async function setupApp() {
     // setting up all the other routes so the catch-all route
     // doesn't interfere with the other routes
     if (app.get("env") === "development") {
+      console.log('[setupApp] Setting up Vite for development');
       await setupVite(app, server);
     } else {
+      console.log('[setupApp] Serving static files for production');
       serveStatic(app);
     }
 
+    console.log('[setupApp] Application setup completed successfully');
     return server;
-  } catch (error) {
-    console.error('Fatal error in setupApp:', error);
+  } catch (error: any) {
+    console.error('[setupApp] FATAL ERROR:', error);
+    console.error('[setupApp] Error stack:', error.stack);
     throw error;
   }
 }
@@ -157,33 +184,63 @@ async function setupApp() {
 // For Vercel serverless deployment - initialize once and export the app
 let appInitialized = false;
 let appReadyPromise: Promise<any> | null = null;
+let initializationError: Error | null = null;
 
 async function ensureAppInitialized() {
+  console.log('[ensureAppInitialized] Called. Initialized:', appInitialized);
+  
   if (!appInitialized) {
     if (!appReadyPromise) {
+      console.log('[ensureAppInitialized] Starting new initialization...');
       // Use the same setupApp function - it now handles Vercel environment
       appReadyPromise = setupApp().then(() => {
+        console.log('[ensureAppInitialized] Initialization successful');
         appInitialized = true;
+        initializationError = null;
       }).catch((error) => {
-        console.error('Failed to initialize app:', error);
+        console.error('[ensureAppInitialized] FATAL: Initialization failed:', error);
+        console.error('[ensureAppInitialized] Error stack:', error.stack);
         appInitialized = false;
         appReadyPromise = null;
+        initializationError = error;
         throw error;
       });
     }
     await appReadyPromise;
   }
+  
+  if (initializationError) {
+    throw initializationError;
+  }
 }
 
 // Export for Vercel - the app itself with initialization wrapper
 export default async (req: any, res: any) => {
+  const startTime = Date.now();
+  console.log('[Vercel Handler] Request:', req.method, req.url);
+  
   try {
     await ensureAppInitialized();
+    console.log('[Vercel Handler] App initialized, processing request...');
     app(req, res);
-  } catch (error) {
-    console.error('Vercel handler error:', error);
+    const duration = Date.now() - startTime;
+    console.log('[Vercel Handler] Request completed in', duration, 'ms');
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
+    console.error('[Vercel Handler] ERROR after', duration, 'ms');
+    console.error('[Vercel Handler] Error type:', error.constructor.name);
+    console.error('[Vercel Handler] Error message:', error.message);
+    console.error('[Vercel Handler] Error stack:', error.stack);
+    
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Internal Server Error', message: String(error) });
+      res.status(500).json({ 
+        error: 'Internal Server Error',
+        message: error.message,
+        type: error.constructor.name,
+        timestamp: new Date().toISOString(),
+        // Include stack trace in development or when debugging
+        stack: process.env.DEBUG ? error.stack : undefined
+      });
     }
   }
 };

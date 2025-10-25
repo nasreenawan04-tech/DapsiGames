@@ -2,11 +2,13 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist/public",
-  "installCommand": "npm install",
+  "installCommand": "npm install --legacy-peer-deps --omit=optional",
   "framework": null,
   "functions": {
     "api/index.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "memory": 1024,
+      "includeFiles": "dist/**"
     }
   },
   "rewrites": [

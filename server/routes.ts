@@ -71,7 +71,7 @@ import {
 import { eq, desc, sql, inArray, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { setupWebSocket, broadcastLeaderboardUpdate, wss } from "./websocket";
-import { healthCheck } from "./middleware/health";
+import { healthCheck, debugInfo } from "./middleware/health";
 import { cacheMiddleware } from "./middleware/cache";
 import { validateRegistration, validateLogin } from "./middleware/validation";
 import { requireAuth, optionalAuth, type AuthRequest } from "./middleware/auth";
@@ -104,6 +104,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   app.get("/api/health", healthCheck);
+  app.get("/api/debug", debugInfo);
+  
   // ===== Authentication Routes =====
 
   // Register new user
