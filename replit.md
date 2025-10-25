@@ -6,6 +6,18 @@ DapsiGames is a web-based educational platform designed to gamify learning for s
 
 ## Recent Changes (October 2025)
 
+**Vercel Deployment Error Fix** (October 25, 2025)
+- ✅ Fixed FUNCTION_INVOCATION_FAILED error by handling Rollup optional dependencies
+- ✅ Added comprehensive error handling with granular try/catch blocks throughout serverless function
+- ✅ Implemented detailed logging that appears in Vercel's /_logs endpoint
+- ✅ Updated vercel.json with `--omit=optional` flag to prevent build failures
+- ✅ Increased function memory limit to 1024 MB for better performance
+- ✅ Enhanced .vercelignore to reduce deployment bundle size
+- ✅ Added /api/debug endpoint for environment and system diagnostics
+- ✅ Enhanced /api/health endpoint with platform and environment information
+- ✅ All logging includes timestamps, request timing, and stack traces for debugging
+- 📋 **Documentation**: See VERCEL_ERROR_FIX.md for complete troubleshooting guide
+
 **Firebase Authentication Integration** (October 24, 2025)
 - ✅ Integrated Firebase Authentication for secure user login and signup
 - ✅ Installed Firebase SDK (client) and Firebase Admin SDK (server)
